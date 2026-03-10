@@ -10,8 +10,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="InvertirAR">
 <meta name="theme-color" content="#04060d">
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiSW52ZXJ0aXJBUiIsInNob3J0X25hbWUiOiJJbnZlcnRpckFSIiwic3RhcnRfdXJsIjoiLiIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwNDA2MGQiLCJ0aGVtZV9jb2xvciI6IiMwNDA2MGQiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB3aWR0aCUzRCcxOTInIGhlaWdodCUzRCcxOTInIHhtbG5zJTNEJ2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyUzRSUzQ3JlY3QgeD0nMCcgeT0nMCcgd2lkdGglM0QnMTkyJyBoZWlnaHQlM0QnMTkyJyByeD0nMzInIGZpbGwlM0QnJTIzZjBjMDQwJy8lM0UlM0N0ZXh0IHglM0QnOTYnIHklM0QnMTI4JyB0ZXh0LWFuY2hvciUzRCdtaWRkbGUnIGZvbnQtc2l6ZSUzRCcxMTAnJTNFJTI2IzEyODIwNiUzQi8lM0UlM0MvdGV4dCUzRSUzQy9zdmclM0UiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
+<link rel="manifest" href="manifest.json">
 <link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -36,6 +37,18 @@
   --r: 16px;
   --r-sm: 10px;
 }
+/* ── CONTEXTUAL TOOLTIPS ── */
+.tab-wrap { position: relative; display: inline-flex; align-items: center; }
+.tab-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: rgba(240,192,64,0.15); border: 1px solid rgba(240,192,64,0.3);
+  color: var(--gold); font-size: 9px; font-weight: 900;
+  cursor: pointer; margin-left: 2px; flex-shrink: 0;
+  transition: all .2s; line-height: 1; font-family: monospace;
+}
+.tab-help:hover { background: rgba(240,192,64,0.3); transform: scale(1.15); }
+
 /* ── LIGHT MODE ── */
 body.light-mode {
   --bg:#f0f4f8; --bg2:#e2eaf4; --card:#ffffff; --card2:#f5f8fc;
@@ -566,6 +579,7 @@ body.modo-simple #simple-banner{display:block}
     </div>
     <div class="header-actions">
       <button class="btn btn-ghost" id="btn-modo-simple" onclick="toggleModoSimple()" title="Modo Simple">🎯 Modo Simple</button>
+      <button class="btn btn-ghost" id="btn-auth" onclick="showAuthModal()" title="Mi cuenta" style="font-size:11px">👤 Cuenta</button>
       <button class="btn btn-ghost" id="btn-notif" onclick="requestNotifPermission()" title="Activar notificaciones de alertas" style="font-size:11px">🔔 Notif.</button>
       <button class="btn btn-ghost header-secondary" onclick="exportCSV()" title="Exportar CSV">⬇ CSV</button>
       <button class="btn btn-ghost header-secondary" onclick="exportPDF()" title="Exportar PDF">⬇ PDF</button>
@@ -1278,27 +1292,67 @@ body.modo-simple #simple-banner{display:block}
 
 <!-- ================== HISTORIAL ================== -->
 <div id="panel-historial" class="panel">
-  <div class="card" style="padding:0;overflow:hidden">
-    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-      <span class="card-title" style="margin:0">Movimientos</span>
-      <button class="btn btn-ghost" onclick="showHistoryForm()" style="font-size:11px;padding:6px 12px">+ Agregar</button>
+
+  <!-- ── Summary cards ── -->
+  <div id="hist-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
+
+  <!-- ── P&L chart ── -->
+  <div id="hist-chart-wrap" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">📊 P&amp;L acumulado (operaciones cerradas)</div>
+    </div>
+    <canvas id="hist-pnl-chart" style="width:100%;display:block;height:90px"></canvas>
+  </div>
+
+  <!-- ── Operations table ── -->
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:16px">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span class="card-title" style="margin:0">📋 Operaciones</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="hist-filter" onchange="renderHistory()" style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;color:var(--text);font-size:11px;font-family:'Cabinet Grotesk',sans-serif">
+          <option value="all">Todas</option>
+          <option value="buy">Solo compras</option>
+          <option value="sell">Solo ventas</option>
+          <option value="closed">Cerradas (con P&L)</option>
+        </select>
+        <button class="btn btn-ghost" onclick="showHistoryForm()" style="font-size:11px;padding:6px 12px">+ Manual</button>
+      </div>
     </div>
     <div id="history-list"></div>
   </div>
-  <div id="history-form" style="display:none;margin-top:16px">
+
+  <!-- ── Monthly summary ── -->
+  <div id="hist-monthly-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:800;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">📅 Resumen mensual</div>
+    <div id="hist-monthly"></div>
+  </div>
+
+  <!-- ── Manual entry form ── -->
+  <div id="history-form" style="display:none">
     <div class="form-section">
-      <div class="form-title">Nuevo movimiento</div>
+      <div class="form-title">➕ Nueva operación manual</div>
       <div class="field-row">
-        <div class="field"><label>Activo</label><input id="h-ticker" type="text" placeholder="AAPL"></div>
-        <div class="field"><label>Tipo</label><select id="h-tipo"><option value="buy">Compra</option><option value="sell">Venta</option></select></div>
+        <div class="field"><label>Activo</label><input id="h-ticker" type="text" placeholder="AAPL" style="text-transform:uppercase"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="h-tipo">
+            <option value="buy">🟢 Compra</option>
+            <option value="sell">🔴 Venta</option>
+            <option value="dividend">💰 Dividendo</option>
+          </select>
+        </div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Cantidad</label><input id="h-cantidad" type="number" placeholder="5"></div>
-        <div class="field"><label>Precio (USD)</label><input id="h-precio" type="number" placeholder="180"></div>
+        <div class="field"><label>Cantidad</label><input id="h-cantidad" type="number" placeholder="5" min="0" oninput="previewHistoryEntry()"></div>
+        <div class="field"><label>Precio unitario (USD)</label><input id="h-precio" type="number" placeholder="180" step="0.01" oninput="previewHistoryEntry()"></div>
       </div>
-      <div class="field"><label>Fecha</label><input id="h-fecha" type="date"></div>
+      <div class="field-row">
+        <div class="field"><label>Fecha</label><input id="h-fecha" type="date"></div>
+        <div class="field"><label>Comisión %</label><input id="h-comision" type="number" placeholder="0.5" value="0.5" step="0.1" min="0"></div>
+      </div>
+      <div class="field"><label>Notas (opcional)</label><input id="h-notas" type="text" placeholder="Ej: Compra por caída del mercado"></div>
+      <div id="h-preview" style="display:none;background:rgba(77,159,255,0.06);border:1px solid rgba(77,159,255,0.2);border-radius:10px;padding:12px 14px;margin-top:4px;font-size:12px;color:var(--muted2)"></div>
       <div class="form-actions">
-        <button class="btn-primary" onclick="saveHistory()">Guardar</button>
+        <button class="btn-primary" onclick="saveHistory()">Guardar operación</button>
         <button class="btn-secondary" onclick="cancelHistoryForm()">Cancelar</button>
       </div>
     </div>
@@ -1514,23 +1568,104 @@ body.modo-simple #simple-banner{display:block}
 </div><!-- /page -->
 
 <!-- ============== ONBOARDING OVERLAY ============== -->
-<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;background:rgba(4,6,13,0.95);z-index:1000;overflow-y:auto;padding:24px 16px">
-  <div style="max-width:520px;margin:0 auto">
-    <div style="text-align:center;margin-bottom:28px">
-      <div style="font-size:40px;margin-bottom:10px">📈</div>
-      <div style="font-size:24px;font-weight:900;color:#f0f6ff;letter-spacing:-0.5px">Bienvenido a InvertirAR</div>
-      <div style="font-size:13px;color:var(--muted2);margin-top:6px">Tu panel de inversiones inteligente · Paso <span id="ob-step-num">1</span> de 5</div>
+<!-- ══════════ AUTH MODAL ══════════ -->
+<div id="auth-modal" style="display:none;position:fixed;inset:0;background:rgba(4,6,13,0.96);z-index:10002;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px)">
+  <div style="background:var(--card);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.7)">
+    <!-- Logo -->
+    <div style="padding:28px 28px 0;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">📈</div>
+      <div style="font-size:22px;font-weight:900;color:#f0f6ff;letter-spacing:-0.5px">InvertirAR</div>
+      <div style="font-size:12px;color:var(--muted2);margin-top:4px">Tu cartera segura en la nube</div>
     </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px;margin-bottom:20px">
+    <!-- Tabs -->
+    <div style="display:flex;margin:20px 24px 0;background:var(--bg2);border-radius:10px;padding:3px">
+      <button id="auth-tab-login" onclick="switchAuthTab('login')" style="flex:1;padding:8px;border:none;border-radius:8px;font-family:'Cabinet Grotesk',sans-serif;font-size:13px;font-weight:800;cursor:pointer;background:var(--card);color:#f0f6ff;transition:all .2s">Iniciar sesión</button>
+      <button id="auth-tab-register" onclick="switchAuthTab('register')" style="flex:1;padding:8px;border:none;border-radius:8px;font-family:'Cabinet Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:var(--muted2);transition:all .2s">Crear cuenta</button>
+    </div>
+    <!-- Form -->
+    <div style="padding:20px 24px 24px">
+      <div id="auth-error" style="display:none;background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.3);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red);margin-bottom:14px"></div>
+      <div id="auth-success" style="display:none;background:rgba(0,214,143,0.1);border:1px solid rgba(0,214,143,0.3);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);margin-bottom:14px"></div>
+      <div class="field" style="margin-bottom:12px">
+        <label>Email</label>
+        <input id="auth-email" type="email" placeholder="tu@email.com" style="width:100%" onkeydown="if(event.key==='Enter')authSubmit()">
+      </div>
+      <div class="field" id="auth-name-wrap" style="display:none;margin-bottom:12px">
+        <label>Nombre</label>
+        <input id="auth-name" type="text" placeholder="Tu nombre" style="width:100%">
+      </div>
+      <div class="field" style="margin-bottom:16px">
+        <label>Contraseña</label>
+        <div style="position:relative">
+          <input id="auth-password" type="password" placeholder="Mínimo 6 caracteres" style="width:100%;padding-right:40px" onkeydown="if(event.key==='Enter')authSubmit()">
+          <button onclick="toggleAuthPwd()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px" title="Mostrar contraseña">👁</button>
+        </div>
+      </div>
+      <button onclick="authSubmit()" id="auth-submit-btn" class="btn-primary" style="width:100%;padding:12px;font-size:14px;margin-bottom:12px">Iniciar sesión</button>
+      <!-- Google login -->
+      <button onclick="authGoogle()" style="width:100%;padding:11px;background:var(--card2);border:1px solid var(--border2);border-radius:10px;color:#f0f6ff;font-family:'Cabinet Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continuar con Google
+      </button>
+      <!-- Config section (hidden by default, shown when no keys set) -->
+      <div id="auth-config-section" style="display:none;border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:11px;color:var(--muted2);margin-bottom:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px">⚙️ Configurar Supabase</div>
+        <div class="field" style="margin-bottom:8px">
+          <label>Supabase URL</label>
+          <input id="auth-sb-url" type="text" placeholder="https://xxx.supabase.co" style="width:100%;font-size:11px">
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <label>Supabase Anon Key</label>
+          <input id="auth-sb-key" type="text" placeholder="eyJ..." style="width:100%;font-size:11px">
+        </div>
+        <button onclick="saveSupabaseConfig()" class="btn-secondary" style="width:100%;font-size:12px">Guardar configuración</button>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted2);line-height:1.7">
+          1. Creá cuenta gratis en <strong style="color:#f0f6ff">supabase.com</strong><br>
+          2. Nuevo proyecto → Settings → API<br>
+          3. Copiá URL y anon/public key
+        </div>
+      </div>
+      <div style="text-align:center">
+        <button onclick="toggleAuthConfig()" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif">⚙️ Configurar servidor</button>
+      </div>
+      <!-- Skip option -->
+      <div style="text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <button onclick="skipAuth()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif">Usar sin cuenta (solo local)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User badge (shown when logged in) -->
+<div id="user-badge" style="display:none;position:fixed;bottom:20px;right:20px;z-index:9999;background:var(--card2);border:1px solid var(--border2);border-radius:40px;padding:8px 14px 8px 10px;display:none;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.4);font-size:12px;cursor:pointer" onclick="showUserMenu()">
+  <div id="user-avatar" style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff"></div>
+  <span id="user-name-badge" style="color:#f0f6ff;font-weight:700"></span>
+  <span style="color:var(--green);font-size:10px">● sync</span>
+</div>
+
+<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;background:rgba(4,6,13,0.92);z-index:10001;overflow-y:auto;padding:24px 16px;backdrop-filter:blur(6px)">
+  <div style="max-width:540px;margin:0 auto">
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border);border-radius:40px;padding:6px 18px;margin-bottom:14px">
+        <span style="font-size:16px">📈</span>
+        <span style="font-size:13px;font-weight:800;color:#f0f6ff">InvertirAR</span>
+        <span style="font-size:11px;color:var(--muted2)">· Tutorial</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted2)">Paso <span id="ob-step-num">1</span> de 5</div>
+    </div>
+    <!-- Card -->
+    <div style="background:var(--card);border:1px solid var(--border2);border-radius:20px;padding:24px 24px 20px;margin-bottom:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
       <div id="ob-content"></div>
     </div>
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button id="ob-prev" class="btn btn-ghost" onclick="obStep(-1)" style="display:none">← Anterior</button>
-      <div style="display:flex;gap:6px;align-items:center" id="ob-dots"></div>
-      <button id="ob-next" class="btn btn-gold" onclick="obStep(1)">Siguiente →</button>
+    <!-- Controls -->
+    <div style="display:flex;gap:10px;justify-content:center;align-items:center">
+      <button id="ob-prev" class="btn btn-ghost" onclick="obStep(-1)" style="display:none;min-width:100px">← Anterior</button>
+      <div style="display:flex;gap:7px;align-items:center" id="ob-dots"></div>
+      <button id="ob-next" class="btn btn-gold" onclick="obStep(1)" style="min-width:120px">Siguiente →</button>
     </div>
-    <div style="text-align:center;margin-top:14px">
-      <button onclick="closeOnboarding()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif">Saltar tutorial</button>
+    <div style="text-align:center;margin-top:12px">
+      <button onclick="closeOnboarding()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;padding:6px 12px">Saltar tutorial</button>
     </div>
   </div>
 </div>
@@ -1546,18 +1681,9 @@ const TYPE_COLORS={"CEDEAR":"#4d9fff","Acción AR":"#ffaa00","FCI":"#00d68f","L�
 let MACRO={oficial:1020,blue:1270,mep:1190,inflacion:3.7}; // fallback, se actualiza en fetchMacro()
 const SP500_YTD=12.4;
 
-let assets=[
-  {id:1,ticker:"AAPL",type:"CEDEAR",currency:"ARS",cantidad:2,precioCompra:249600,precioActual:261400,target:40,notas:"Empresa tech sólida, exposición USD"},
-  {id:2,ticker:"GGAL",type:"Acción AR",currency:"ARS",cantidad:50,precioCompra:3200,precioActual:2800,target:20,notas:"Banco argentino, apuesta recuperación local"},
-  {id:3,ticker:"FCI USD",type:"FCI",currency:"ARS",cantidad:1,precioCompra:250000,precioActual:262000,target:25,notas:"Fondo dolarizado conservador"},
-  {id:4,ticker:"Reserva",type:"Líquida",currency:"USD",cantidad:1,precioCompra:150,precioActual:150,target:15,notas:"Colchón para oportunidades"},
-];
-let alerts=[{id:1,ticker:"AAPL",condition:"sube",threshold:10},{id:2,ticker:"GGAL",condition:"baja",threshold:15}];
-let history=[
-  {id:1,ticker:"AAPL",tipo:"buy",cantidad:2,precio:180,fecha:"2024-11-01"},
-  {id:2,ticker:"GGAL",tipo:"buy",cantidad:50,precio:3.2,fecha:"2024-11-15"},
-  {id:3,ticker:"FCI USD",tipo:"buy",cantidad:1,precio:250,fecha:"2024-12-01"},
-];
+let assets=[];
+let alerts=[];
+let history=[];
 
 // 
 // FINNHUB
@@ -2081,6 +2207,7 @@ function renderAssets(){
       <div class="ac-actions">
         <button class="btn-xs" onclick="editAsset(${a.id})">✏️ Editar</button>
         <button class="btn-xs" onclick="quickPrice(${a.id})">🔄 Precio</button>
+        <button class="btn-xs" style="color:var(--red);border-color:rgba(255,82,82,0.3)" onclick="openSellModal(${a.id})">💸 Vender</button>
         <button class="btn-xs" onclick="toggleExplain(${a.id})">💡 Explicame</button>
         <button class="btn-xs" id="spk-toggle-${a.id}" onclick="toggleSpark(${a.id})" style="color:var(--muted2)">📉 Gráfico ▼</button>
         <button class="btn-xs-red" onclick="deleteAsset(${a.id})">🗑</button>
@@ -2797,29 +2924,343 @@ function drawProjChart(C,M,rm,n,Y){
 // 
 // HISTORY
 // 
+// ══════════════════════════════════════════════════════════════
+// HISTORY & P&L SYSTEM
+// Each entry: {id, ticker, tipo:"buy"|"sell"|"dividend", cantidad, precio(USD), 
+//              fecha, comision(%), notas, pnlUSD(computed on sell)}
+// ══════════════════════════════════════════════════════════════
+
 function renderHistory(){
-  const s=[...history].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  document.getElementById("history-list").innerHTML=s.length?s.map(h=>`
-    <div class="hist-row">
-      <div><span class="hist-type ${h.tipo==="buy"?"hist-buy":"hist-sell"}">${h.tipo==="buy"?"COMPRA":"VENTA"}</span> <strong>${h.ticker}</strong></div>
-      <div style="text-align:center;font-size:12px;color:var(--muted2)">${h.cantidad} unid · $${h.precio}</div>
-      <div style="text-align:right"><strong style="font-family:'JetBrains Mono',monospace">$${(h.cantidad*h.precio).toFixed(0)}</strong><br><span style="font-size:10px;color:var(--muted)">${h.fecha}</span></div>
-      <button class="btn-xs-red" style="margin-left:12px" onclick="deleteHistory(${h.id})">🗑</button>
-    </div>`).join(""):`<div style="padding:24px;color:var(--muted);text-align:center;font-size:13px">Sin movimientos registrados.</div>`;
+  var filter = (document.getElementById("hist-filter")||{value:"all"}).value;
+  var sorted = [...history].sort(function(a,b){ return new Date(b.fecha)-new Date(a.fecha); });
+  var filtered = filter==="all" ? sorted
+    : filter==="buy"    ? sorted.filter(function(h){ return h.tipo==="buy"; })
+    : filter==="sell"   ? sorted.filter(function(h){ return h.tipo==="sell"; })
+    : filter==="closed" ? sorted.filter(function(h){ return h.tipo==="sell"&&h.pnlUSD!=null; })
+    : sorted;
+
+  // ── Operations list ──
+  var listEl = document.getElementById("history-list");
+  if(!listEl) return;
+  if(!filtered.length){
+    listEl.innerHTML = '<div style="padding:28px;color:var(--muted);text-align:center;font-size:13px">'+
+      (history.length===0
+        ? '📋 Sin operaciones aún. Usá el botón <strong style="color:#f0f6ff">+ Manual</strong> o el botón <strong style="color:var(--red)">💸 Vender</strong> en un activo.'
+        : 'Sin operaciones para el filtro seleccionado.'
+      )+'</div>';
+  } else {
+    listEl.innerHTML = filtered.map(function(h){
+      var typeColor = h.tipo==="buy"?"var(--green)":h.tipo==="sell"?"var(--red)":"var(--amber)";
+      var typeLabel = h.tipo==="buy"?"COMPRA":h.tipo==="sell"?"VENTA":"DIVIDENDO";
+      var total = (h.cantidad * h.precio * (1 + (h.tipo==="buy"?1:-1)*(h.comision||0)/100));
+      var pnlHtml = "";
+      if(h.tipo==="sell" && h.pnlUSD!=null){
+        var pnlColor = h.pnlUSD>=0?"var(--green)":"var(--red)";
+        var pnlSign  = h.pnlUSD>=0?"+":"";
+        var pnlARS = h.pnlUSD * getCCL();
+        pnlHtml = '<div style="font-size:11px;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap">'
+          +'<span>P&L: <strong style="color:'+pnlColor+'">'+pnlSign+'USD $'+h.pnlUSD.toFixed(2)+(h.pnlPct!=null?' ('+pnlSign+h.pnlPct.toFixed(1)+'%)':'')+'</strong></span>'
+          +'<span style="color:var(--muted2)">≈ <strong style="color:'+pnlColor+'">'+pnlSign+'ARS $'+Math.round(Math.abs(pnlARS)).toLocaleString("es-AR")+'</strong></span>'
+          +'</div>';
+      }
+      return '<div class="hist-row">'
+        +'<div style="display:flex;flex-direction:column;gap:2px">'
+        +'<div><span style="background:'+typeColor+'18;color:'+typeColor+';border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800;font-family:monospace">'+typeLabel+'</span> <strong style="color:#f0f6ff">'+h.ticker+'</strong></div>'
+        +(h.notas?'<div style="font-size:10px;color:var(--muted);font-style:italic">'+h.notas+'</div>':'')
+        +pnlHtml
+        +'</div>'
+        +'<div style="text-align:center;font-size:12px;color:var(--muted2)">'+h.cantidad+' unid<br>USD $'+parseFloat(h.precio).toFixed(2)+'</div>'
+        +'<div style="text-align:right">'
+        +'<strong style="font-family:monospace;color:#f0f6ff">USD $'+Math.abs(total).toFixed(2)+'</strong>'
+        +'<br><span style="font-size:10px;color:var(--muted)">'+h.fecha+'</span>'
+        +(h.comision?'<br><span style="font-size:10px;color:var(--muted)">com. '+(h.comision||0.5)+'%</span>':'')
+        +'</div>'
+        +'<button class="btn-xs-red" style="margin-left:8px;flex-shrink:0" onclick="deleteHistory('+h.id+')">🗑</button>'
+        +'</div>';
+    }).join("");
+  }
+
+  // ── Summary cards ──
+  renderHistorySummary();
+
+  // ── P&L chart ──
+  renderHistoryPnLChart();
+
+  // ── Monthly breakdown ──
+  renderHistoryMonthly();
 }
-function showHistoryForm(){document.getElementById("history-form").style.display="block";document.getElementById("h-fecha").value=new Date().toISOString().split("T")[0];}
+
+function renderHistorySummary(){
+  var el = document.getElementById("hist-summary");
+  if(!el) return;
+  var sells = history.filter(function(h){ return h.tipo==="sell"&&h.pnlUSD!=null; });
+  var totalInvested = history.filter(function(h){ return h.tipo==="buy"; })
+    .reduce(function(s,h){ return s+h.cantidad*h.precio*(1+(h.comision||0.5)/100); },0);
+  var totalPnL = sells.reduce(function(s,h){ return s+h.pnlUSD; },0);
+  var winners  = sells.filter(function(h){ return h.pnlUSD>0; }).length;
+  var losers   = sells.filter(function(h){ return h.pnlUSD<0; }).length;
+  var winRate  = sells.length>0?Math.round(winners/sells.length*100):null;
+  var bestTrade= sells.length>0?sells.reduce(function(best,h){ return h.pnlUSD>best.pnlUSD?h:best; },sells[0]):null;
+  var worstTrade=sells.length>0?sells.reduce(function(worst,h){ return h.pnlUSD<worst.pnlUSD?h:worst; },sells[0]):null;
+
+  var ccl = getCCL();
+  var totalPnLARS = totalPnL * ccl;
+  var cards = [
+    {label:"Invertido total",   val:"USD $"+totalInvested.toFixed(0), color:"var(--blue)"},
+    {label:"P&L realizado (USD)", val:(totalPnL>=0?"+":"")+"USD $"+totalPnL.toFixed(2), color:totalPnL>=0?"var(--green)":"var(--red)"},
+    {label:"P&L realizado (ARS)", val:(totalPnLARS>=0?"+":"")+"ARS $"+Math.round(Math.abs(totalPnLARS)).toLocaleString("es-AR"), color:totalPnL>=0?"var(--green)":"var(--red)"},
+    {label:"Win rate",          val:winRate!=null?winRate+"% ("+winners+"W / "+losers+"L)":"—", color:"var(--amber)"},
+    {label:"Operaciones",       val:history.length+" total / "+sells.length+" cerradas", color:"var(--muted2)"},
+  ];
+  if(bestTrade) cards.push({label:"Mejor trade", val:bestTrade.ticker+" +"+"USD $"+bestTrade.pnlUSD.toFixed(2)+" / ARS $"+Math.round(bestTrade.pnlUSD*ccl).toLocaleString("es-AR"), color:"var(--green)"});
+  if(worstTrade&&worstTrade.pnlUSD<0) cards.push({label:"Peor trade", val:worstTrade.ticker+" "+"USD $"+worstTrade.pnlUSD.toFixed(2)+" / ARS $"+Math.round(worstTrade.pnlUSD*ccl).toLocaleString("es-AR"), color:"var(--red)"});
+
+  el.innerHTML = cards.map(function(c){
+    return '<div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px 14px">'
+      +'<div style="font-size:10px;color:var(--muted2);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">'+c.label+'</div>'
+      +'<div style="font-size:14px;font-weight:900;color:'+c.color+';font-family:monospace">'+c.val+'</div>'
+      +'</div>';
+  }).join("");
+}
+
+function renderHistoryPnLChart(){
+  var wrap = document.getElementById("hist-chart-wrap");
+  var canvas = document.getElementById("hist-pnl-chart");
+  if(!wrap||!canvas) return;
+  var sells = [...history].filter(function(h){ return h.tipo==="sell"&&h.pnlUSD!=null; })
+    .sort(function(a,b){ return new Date(a.fecha)-new Date(b.fecha); });
+  if(sells.length<2){ wrap.style.display="none"; return; }
+  wrap.style.display="block";
+  var W = wrap.offsetWidth||600, H = 90;
+  canvas.width=W*window.devicePixelRatio; canvas.height=H*window.devicePixelRatio;
+  canvas.style.width=W+"px"; canvas.style.height=H+"px";
+  var ctx=canvas.getContext("2d");
+  ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+  ctx.clearRect(0,0,W,H);
+  // Build cumulative P&L
+  var cum=0, points=[];
+  sells.forEach(function(h){ cum+=h.pnlUSD; points.push({d:h.fecha,v:cum,op:h.ticker}); });
+  var vals=points.map(function(p){ return p.v; });
+  var minV=Math.min(0,Math.min.apply(null,vals)), maxV=Math.max(0,Math.max.apply(null,vals));
+  var range=maxV-minV||1;
+  var pad={t:8,r:8,b:18,l:52};
+  var cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  var xP=function(i){ return pad.l+(i/(points.length-1))*cW; };
+  var yP=function(v){ return pad.t+(1-(v-minV)/range)*cH; };
+  var finalVal=vals[vals.length-1];
+  var color=finalVal>=0?"#00d68f":"#ff5252";
+  // Zero line
+  var zeroY=yP(0);
+  ctx.strokeStyle="rgba(255,255,255,0.1)"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad.l,zeroY); ctx.lineTo(W-pad.r,zeroY); ctx.stroke();
+  // Area
+  var grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grad.addColorStop(0,color+"44"); grad.addColorStop(1,color+"00");
+  ctx.beginPath(); ctx.moveTo(xP(0),yP(vals[0]));
+  vals.forEach(function(v,i){ if(i>0) ctx.lineTo(xP(i),yP(v)); });
+  ctx.lineTo(xP(vals.length-1),H-pad.b+2); ctx.lineTo(xP(0),H-pad.b+2); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  // Line
+  ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin="round";
+  vals.forEach(function(v,i){ i===0?ctx.moveTo(xP(i),yP(v)):ctx.lineTo(xP(i),yP(v)); });
+  ctx.stroke();
+  // Y labels
+  [minV,maxV].forEach(function(v){
+    var y=yP(v);
+    ctx.fillStyle="#3a4f6a"; ctx.font="9px JetBrains Mono"; ctx.textAlign="right";
+    ctx.fillText((v>=0?"+":"")+"$"+v.toFixed(0), pad.l-4, y+3);
+  });
+  // Final label
+  ctx.textAlign="right"; ctx.fillStyle=color; ctx.font="bold 10px Cabinet Grotesk";
+  ctx.fillText((finalVal>=0?"+":"")+"USD $"+finalVal.toFixed(2)+" acumulado", W-pad.r, H-4);
+}
+
+function renderHistoryMonthly(){
+  var wrap  = document.getElementById("hist-monthly-wrap");
+  var inner = document.getElementById("hist-monthly");
+  if(!wrap||!inner) return;
+  var ops = history.filter(function(h){ return h.tipo==="sell"&&h.pnlUSD!=null; });
+  if(ops.length===0){ wrap.style.display="none"; return; }
+  wrap.style.display="block";
+  // Group by YYYY-MM
+  var months={};
+  ops.forEach(function(h){
+    var m=h.fecha.slice(0,7);
+    if(!months[m]) months[m]={pnl:0,trades:0};
+    months[m].pnl+=h.pnlUSD; months[m].trades++;
+  });
+  var keys=Object.keys(months).sort().reverse();
+  var best=keys.reduce(function(b,k){ return months[k].pnl>months[b].pnl?k:b; },keys[0]);
+  var worst=keys.reduce(function(w,k){ return months[k].pnl<months[w].pnl?k:w; },keys[0]);
+  inner.innerHTML = keys.map(function(m){
+    var d=months[m];
+    var c=d.pnl>=0?"var(--green)":"var(--red)";
+    var isBest=m===best&&d.pnl>0, isWorst=m===worst&&d.pnl<0;
+    var mARS = d.pnl * getCCL();
+    return '<div style="background:var(--card2);border-radius:10px;margin-bottom:6px;border:1px solid var(--border);padding:10px 14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'
+      +'<div style="font-size:13px;font-weight:700;color:#f0f6ff">'+m+(isBest?' <span style="font-size:10px;color:var(--green)">★ mejor</span>':"")+(isWorst?' <span style="font-size:10px;color:var(--red)">★ peor</span>':"")+'</div>'
+      +'<div style="font-size:12px;color:var(--muted2)">'+d.trades+' op.</div>'
+      +'<div style="font-family:monospace;font-weight:900;color:'+c+'">'+(d.pnl>=0?"+":"")+"USD $"+d.pnl.toFixed(2)+'</div>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--muted2);margin-top:3px">≈ '+(mARS>=0?"+":"")+'ARS $'+Math.round(Math.abs(mARS)).toLocaleString("es-AR")+' al CCL actual</div>'
+      +'</div>';
+  }).join("");
+}
+
+function showHistoryForm(){
+  document.getElementById("history-form").style.display="block";
+  document.getElementById("h-fecha").value=new Date().toISOString().split("T")[0];
+  document.getElementById("h-preview").style.display="none";
+}
 function cancelHistoryForm(){document.getElementById("history-form").style.display="none";}
-function saveHistory(){
-  const ticker=document.getElementById("h-ticker").value.trim();
-  const tipo=document.getElementById("h-tipo").value;
-  const cantidad=parseFloat(document.getElementById("h-cantidad").value);
-  const precio=parseFloat(document.getElementById("h-precio").value);
-  const fecha=document.getElementById("h-fecha").value;
-  if(!ticker||isNaN(cantidad)||isNaN(precio)||!fecha)return alert("Completá todos los campos.");
-  history.push({id:Date.now(),ticker,tipo,cantidad,precio,fecha});
-  cancelHistoryForm();renderHistory();saveState();
+function previewHistoryEntry(){
+  var ticker  = (document.getElementById("h-ticker").value||"").trim().toUpperCase();
+  var tipo    = document.getElementById("h-tipo").value;
+  var cantidad= parseFloat(document.getElementById("h-cantidad").value)||0;
+  var precio  = parseFloat(document.getElementById("h-precio").value)||0;
+  var com     = parseFloat(document.getElementById("h-comision").value)||0;
+  var prev    = document.getElementById("h-preview");
+  if(!ticker||!cantidad||!precio){ prev.style.display="none"; return; }
+  var gross   = cantidad*precio;
+  var comAmt  = gross*com/100;
+  var net     = tipo==="buy"?gross+comAmt:gross-comAmt;
+  prev.style.display="block";
+  prev.innerHTML="Total bruto: <strong>USD $"+gross.toFixed(2)+"</strong> · Comisión: <strong>USD $"+comAmt.toFixed(2)+"</strong> · Neto: <strong style='color:var(--blue)'>USD $"+net.toFixed(2)+"</strong>";
 }
-function deleteHistory(id){history=history.filter(h=>h.id!==id);renderHistory();}
+function saveHistory(){
+  var ticker  = (document.getElementById("h-ticker").value||"").trim().toUpperCase();
+  var tipo    = document.getElementById("h-tipo").value;
+  var cantidad= parseFloat(document.getElementById("h-cantidad").value);
+  var precio  = parseFloat(document.getElementById("h-precio").value);
+  var fecha   = document.getElementById("h-fecha").value;
+  var comision= parseFloat(document.getElementById("h-comision").value)||0.5;
+  var notas   = (document.getElementById("h-notas").value||"").trim();
+  if(!ticker||isNaN(cantidad)||isNaN(precio)||!fecha) return showToast("⚠️ Completá todos los campos obligatorios","var(--red)");
+  var entry = {id:Date.now(),ticker,tipo,cantidad,precio,fecha,comision,notas:notas||null};
+  // If sell, compute P&L against average buy price
+  if(tipo==="sell"){
+    var buys=history.filter(function(h){ return h.ticker===ticker&&h.tipo==="buy"; });
+    if(buys.length>0){
+      var avgBuy=buys.reduce(function(s,h){ return s+h.precio*h.cantidad; },0)/buys.reduce(function(s,h){ return s+h.cantidad; },0);
+      var pnlUSD=(precio-avgBuy)*cantidad - (precio*cantidad*comision/100);
+      entry.pnlUSD=parseFloat(pnlUSD.toFixed(4));
+      entry.pnlARS=parseFloat((pnlUSD*getCCL()).toFixed(0));
+      entry.pnlPct=parseFloat(((precio-avgBuy)/avgBuy*100).toFixed(2));
+      entry.avgBuyPrice=parseFloat(avgBuy.toFixed(4));
+    }
+  }
+  history.push(entry);
+  cancelHistoryForm();renderHistory();saveState();
+  showToast(tipo==="sell"&&entry.pnlUSD!=null
+    ?"💸 Venta registrada · P&L: "+(entry.pnlUSD>=0?"+":"")+"USD $"+entry.pnlUSD.toFixed(2)
+    :"✅ Operación guardada","var(--green)");
+}
+function deleteHistory(id){
+  if(!confirm("¿Eliminar esta operación?")) return;
+  history=history.filter(function(h){ return h.id!==id; });
+  renderHistory();saveState();
+}
+
+// ══════════════════════════════════════════════════════════════
+// SELL MODAL
+// ══════════════════════════════════════════════════════════════
+var _sellAssetId = null;
+
+function openSellModal(assetId){
+  var a = assets.find(function(x){ return x.id===assetId; });
+  if(!a) return;
+  _sellAssetId = assetId;
+  var cur = assetCurrency(a);
+  var priceUSD = assetUSD(a,true);
+  var infoEl = document.getElementById("sell-asset-info");
+  infoEl.innerHTML = '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    +'<div><strong style="color:#f0f6ff;font-size:14px">'+a.ticker+'</strong> <span style="font-size:11px;color:var(--muted2)">'+a.type+'</span></div>'
+    +'<div style="font-size:12px;color:var(--muted2)">'+a.cantidad+' unidades en cartera</div>'
+    +'</div>'
+    +'<div style="margin-top:8px;font-size:12px;color:var(--muted2)">'
+    +'Precio compra: <strong style="color:#f0f6ff">USD $'+assetUSD(a,false).toFixed(2)+'</strong> · '
+    +'Precio actual: <strong style="color:var(--blue)">USD $'+priceUSD.toFixed(2)+'</strong>'
+    +'</div>';
+  document.getElementById("sell-cantidad").value = a.cantidad;
+  document.getElementById("sell-precio").value   = priceUSD.toFixed(2);
+  document.getElementById("sell-fecha").value    = new Date().toISOString().split("T")[0];
+  document.getElementById("sell-comision").value = "0.5";
+  updateSellPreview();
+  var modal = document.getElementById("sell-modal");
+  modal.style.display = "flex";
+}
+
+function closeSellModal(){
+  document.getElementById("sell-modal").style.display="none";
+  _sellAssetId=null;
+}
+
+function updateSellPreview(){
+  if(_sellAssetId===null) return;
+  var a = assets.find(function(x){ return x.id===_sellAssetId; });
+  if(!a) return;
+  var cantidad  = parseFloat(document.getElementById("sell-cantidad").value)||0;
+  var precio    = parseFloat(document.getElementById("sell-precio").value)||0;
+  var comision  = parseFloat(document.getElementById("sell-comision").value)||0;
+  var prev      = document.getElementById("sell-preview");
+  if(!cantidad||!precio){ prev.style.display="none"; return; }
+  var avgBuyUSD = assetUSD(a,false);
+  var gross     = cantidad*precio;
+  var comAmt    = gross*comision/100;
+  var net       = gross-comAmt;
+  var pnl       = (precio-avgBuyUSD)*cantidad - comAmt;
+  var pnlPct    = avgBuyUSD>0?(precio-avgBuyUSD)/avgBuyUSD*100:0;
+  var pnlColor  = pnl>=0?"var(--green)":"var(--red)";
+  var sign      = pnl>=0?"+":"";
+  prev.style.display="block";
+  prev.style.background=pnl>=0?"rgba(0,214,143,0.06)":"rgba(255,82,82,0.06)";
+  prev.style.border="1px solid "+(pnl>=0?"rgba(0,214,143,0.25)":"rgba(255,82,82,0.25)");
+  var pnlARS = pnl * getCCL();
+  var comARS  = comAmt * getCCL();
+  var netARS  = net * getCCL();
+  prev.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div>Bruto: <strong style="color:#f0f6ff">USD $'+gross.toFixed(2)+'</strong></div>'
+    +'<div>Comisión IOL: <strong style="color:var(--amber)">-USD $'+comAmt.toFixed(2)+'<br><span style="font-size:10px;color:var(--muted)">≈ ARS $'+Math.round(comARS).toLocaleString("es-AR")+'</span></strong></div>'
+    +'<div>Neto recibido: <strong style="color:var(--blue)">USD $'+net.toFixed(2)+'<br><span style="font-size:10px;color:var(--muted)">≈ ARS $'+Math.round(netARS).toLocaleString("es-AR")+'</span></strong></div>'
+    +'<div style="grid-column:1/-1;padding-top:6px;border-top:1px solid var(--border);margin-top:4px">'
+    +'<div style="font-size:15px;font-weight:900;color:'+pnlColor+'">P&L: '+sign+'USD $'+pnl.toFixed(2)+' ('+sign+pnlPct.toFixed(1)+'%)</div>'
+    +'<div style="font-size:12px;color:var(--muted2);margin-top:2px">≈ '+sign+'ARS $'+Math.round(Math.abs(pnlARS)).toLocaleString("es-AR")+' al CCL actual</div>'
+    +'</div>'
+    +(cantidad<a.cantidad?'<div style="grid-column:1/-1;font-size:11px;color:var(--muted2)">Quedan '+(a.cantidad-cantidad)+' unidades en cartera</div>':'<div style="grid-column:1/-1;font-size:11px;color:var(--amber)">⚠️ Vendés toda la posición</div>')
+    +'</div>';
+}
+
+function confirmSell(){
+  if(_sellAssetId===null) return;
+  var a = assets.find(function(x){ return x.id===_sellAssetId; });
+  if(!a) return;
+  var cantidad = parseFloat(document.getElementById("sell-cantidad").value);
+  var precio   = parseFloat(document.getElementById("sell-precio").value);
+  var fecha    = document.getElementById("sell-fecha").value;
+  var comision = parseFloat(document.getElementById("sell-comision").value)||0.5;
+  if(!cantidad||!precio||!fecha) return showToast("⚠️ Completá todos los campos","var(--red)");
+  if(cantidad>a.cantidad) return showToast("⚠️ No podés vender más de lo que tenés ("+a.cantidad+" unid)","var(--red)");
+  var avgBuyUSD = assetUSD(a,false);
+  var pnlUSD    = parseFloat(((precio-avgBuyUSD)*cantidad - precio*cantidad*comision/100).toFixed(4));
+  var pnlARS    = parseFloat((pnlUSD * getCCL()).toFixed(0));
+  var pnlPct    = avgBuyUSD>0?parseFloat(((precio-avgBuyUSD)/avgBuyUSD*100).toFixed(2)):null;
+  // Record in history
+  history.push({id:Date.now(),ticker:a.ticker,tipo:"sell",cantidad,precio,fecha,comision,
+    pnlUSD,pnlARS,pnlPct,avgBuyPrice:parseFloat(avgBuyUSD.toFixed(4)),notas:null});
+  // Update or remove asset
+  if(cantidad>=a.cantidad){
+    assets=assets.filter(function(x){ return x.id!==_sellAssetId; });
+    showToast("✅ Posición cerrada · P&L: "+(pnlUSD>=0?"+":"")+"USD $"+pnlUSD.toFixed(2)+" / ARS $"+Math.round(Math.abs(pnlARS)).toLocaleString("es-AR"),"var(--green)");
+  } else {
+    a.cantidad=parseFloat((a.cantidad-cantidad).toFixed(4));
+    showToast("✅ Venta parcial · P&L: "+(pnlUSD>=0?"+":"")+"USD $"+pnlUSD.toFixed(2)+" / ARS $"+Math.round(Math.abs(pnlARS)).toLocaleString("es-AR"),"var(--green)");
+  }
+  closeSellModal();
+  render(); saveState();
+  // Switch to historial tab to show result
+  setTimeout(function(){ switchTab("historial",null); },300);
+}
 
 // 
 // ALERTS
@@ -3233,6 +3674,445 @@ function initCalculadora(){
 }
 
 // 
+// SUPABASE AUTH & CLOUD SYNC
+// ══════════════════════════════════════════════════════════════
+// Config stored in localStorage. User gets keys from supabase.com (free)
+// ══════════════════════════════════════════════════════════════
+
+var _supabase = null;
+var _currentUser = null;
+var _authTab = "login";
+var _syncTimer = null;
+
+function getSBConfig(){
+  return {
+    url: localStorage.getItem("sb_url")||"",
+    key: localStorage.getItem("sb_key")||""
+  };
+}
+
+function initSupabase(){
+  var cfg = getSBConfig();
+  if(!cfg.url||!cfg.key) return false;
+  try{
+    _supabase = window.supabase.createClient(cfg.url, cfg.key);
+    return true;
+  }catch(e){ console.warn("Supabase init error:", e); return false; }
+}
+
+function saveSupabaseConfig(){
+  var url = (document.getElementById("auth-sb-url").value||"").trim();
+  var key = (document.getElementById("auth-sb-key").value||"").trim();
+  if(!url||!key){ showAuthError("Completá URL y Key."); return; }
+  localStorage.setItem("sb_url", url);
+  localStorage.setItem("sb_key", key);
+  if(initSupabase()){ showAuthSuccess("Configuración guardada. Ahora podés registrarte."); }
+  else { showAuthError("No se pudo conectar. Verificá URL y Key."); }
+}
+
+function showAuthModal(){
+  if(!initSupabase()){
+    // Show config section if no keys
+    document.getElementById("auth-config-section").style.display="block";
+  }
+  document.getElementById("auth-modal").style.display="flex";
+  clearAuthMessages();
+}
+function hideAuthModal(){ document.getElementById("auth-modal").style.display="none"; }
+
+function skipAuth(){
+  hideAuthModal();
+  showToast("📱 Usando modo local — tus datos se guardan en este dispositivo","var(--muted2)");
+  localStorage.setItem("sb_skipped","1");
+}
+
+function switchAuthTab(tab){
+  _authTab = tab;
+  clearAuthMessages();
+  var isReg = tab==="register";
+  document.getElementById("auth-name-wrap").style.display = isReg?"block":"none";
+  document.getElementById("auth-submit-btn").textContent = isReg?"Crear cuenta":"Iniciar sesión";
+  var loginBtn  = document.getElementById("auth-tab-login");
+  var regBtn    = document.getElementById("auth-tab-register");
+  loginBtn.style.background  = isReg?"transparent":"var(--card)";
+  loginBtn.style.color       = isReg?"var(--muted2)":"#f0f6ff";
+  regBtn.style.background    = isReg?"var(--card)":"transparent";
+  regBtn.style.color         = isReg?"#f0f6ff":"var(--muted2)";
+}
+
+function toggleAuthPwd(){
+  var inp = document.getElementById("auth-password");
+  inp.type = inp.type==="password"?"text":"password";
+}
+function toggleAuthConfig(){
+  var s = document.getElementById("auth-config-section");
+  s.style.display = s.style.display==="none"?"block":"none";
+}
+
+function showAuthError(msg){ 
+  var el=document.getElementById("auth-error");
+  el.textContent=msg; el.style.display="block";
+  document.getElementById("auth-success").style.display="none";
+}
+function showAuthSuccess(msg){ 
+  var el=document.getElementById("auth-success");
+  el.textContent=msg; el.style.display="block";
+  document.getElementById("auth-error").style.display="none";
+}
+function clearAuthMessages(){
+  document.getElementById("auth-error").style.display="none";
+  document.getElementById("auth-success").style.display="none";
+}
+
+async function authSubmit(){
+  if(!_supabase){ showAuthError("Configurá Supabase primero (tocá ⚙️ Configurar servidor)."); return; }
+  var email = (document.getElementById("auth-email").value||"").trim();
+  var pass  = (document.getElementById("auth-password").value||"").trim();
+  var name  = (document.getElementById("auth-name").value||"").trim();
+  if(!email||!pass){ showAuthError("Ingresá email y contraseña."); return; }
+  if(pass.length<6){ showAuthError("La contraseña debe tener al menos 6 caracteres."); return; }
+  var btn = document.getElementById("auth-submit-btn");
+  btn.textContent="..."; btn.disabled=true;
+  try{
+    var result;
+    if(_authTab==="register"){
+      result = await _supabase.auth.signUp({
+        email, password:pass,
+        options:{ data:{ nombre: name||email.split("@")[0] } }
+      });
+      if(result.error) throw result.error;
+      showAuthSuccess("✅ Cuenta creada. Revisá tu email para confirmar (en algunos proyectos no hace falta).");
+      // Try auto-login
+      if(result.data.session) onAuthSuccess(result.data.user);
+    } else {
+      result = await _supabase.auth.signInWithPassword({ email, password:pass });
+      if(result.error) throw result.error;
+      onAuthSuccess(result.data.user);
+    }
+  }catch(e){
+    var msg = e.message||"Error de autenticación";
+    if(msg.includes("Invalid login")) msg="Email o contraseña incorrectos.";
+    if(msg.includes("already registered")) msg="Este email ya tiene cuenta. Iniciá sesión.";
+    if(msg.includes("Email not confirmed")) msg="Confirmá tu email antes de ingresar.";
+    showAuthError(msg);
+  }
+  btn.disabled=false;
+  btn.textContent=_authTab==="register"?"Crear cuenta":"Iniciar sesión";
+}
+
+async function authGoogle(){
+  if(!_supabase){ showAuthError("Configurá Supabase primero."); return; }
+  try{
+    var result = await _supabase.auth.signInWithOAuth({
+      provider:"google",
+      options:{ redirectTo: window.location.href }
+    });
+    if(result.error) throw result.error;
+  }catch(e){ showAuthError(e.message||"Error con Google"); }
+}
+
+function onAuthSuccess(user){
+  _currentUser = user;
+  hideAuthModal();
+  updateAuthUI();
+  loadCloudData();
+  startAutoSync();
+  var name = (user.user_metadata&&user.user_metadata.nombre)||user.email.split("@")[0];
+  showToast("✅ Hola "+name+"! Tu cartera está sincronizada ☁️","var(--green)");
+}
+
+function updateAuthUI(){
+  var btn = document.getElementById("btn-auth");
+  var badge = document.getElementById("user-badge");
+  if(!_currentUser){
+    if(btn) btn.textContent="👤 Cuenta";
+    if(badge) badge.style.display="none";
+    return;
+  }
+  var name = (_currentUser.user_metadata&&_currentUser.user_metadata.nombre)||_currentUser.email.split("@")[0];
+  var initial = name.charAt(0).toUpperCase();
+  if(btn){ btn.textContent="☁️ "+name; btn.style.color="var(--green)"; }
+  var badgeEl = document.getElementById("user-badge");
+  var avatarEl = document.getElementById("user-avatar");
+  var nameEl   = document.getElementById("user-name-badge");
+  if(badgeEl){ badgeEl.style.display="flex"; }
+  if(avatarEl) avatarEl.textContent = initial;
+  if(nameEl)   nameEl.textContent   = name;
+}
+
+function showUserMenu(){
+  var name = _currentUser ? ((_currentUser.user_metadata&&_currentUser.user_metadata.nombre)||_currentUser.email) : "Usuario";
+  if(confirm("Sesión de "+name+" — ¿Cerrar sesión?")){
+    authSignOut();
+  }
+}
+
+async function authSignOut(){
+  if(_supabase) await _supabase.auth.signOut();
+  _currentUser = null;
+  if(_syncTimer) clearInterval(_syncTimer);
+  updateAuthUI();
+  showToast("👋 Sesión cerrada. Tus datos siguen en este dispositivo.","var(--muted2)");
+}
+
+// ── CLOUD DATA SYNC ──────────────────────────────────────────
+// Stores full state as JSON in `portfolios` table: user_id, data
+// Table DDL (run once in Supabase SQL editor):
+// create table portfolios (
+//   id uuid default gen_random_uuid() primary key,
+//   user_id uuid references auth.users not null unique,
+//   data jsonb not null,
+//   updated_at timestamptz default now()
+// );
+// alter table portfolios enable row level security;
+// create policy "Users own their portfolio" on portfolios
+//   for all using (auth.uid() = user_id);
+
+async function saveCloudData(){
+  if(!_supabase||!_currentUser) return;
+  try{
+    var payload = {
+      assets: assets,
+      alerts: alerts,
+      history: history,
+      snapshots: JSON.parse(localStorage.getItem("invertirAR_snapshots")||"[]"),
+      updated: new Date().toISOString()
+    };
+    var result = await _supabase.from("portfolios").upsert({
+      user_id: _currentUser.id,
+      data: payload,
+      updated_at: new Date().toISOString()
+    },{onConflict:"user_id"});
+    if(result.error) throw result.error;
+    var dot = document.getElementById("sync-dot");
+    if(dot){ dot.style.color="var(--green)"; dot.title="Sincronizado ☁️ "+new Date().toLocaleTimeString("es-AR"); }
+  }catch(e){ console.warn("Cloud save error:", e); }
+}
+
+async function loadCloudData(){
+  if(!_supabase||!_currentUser) return;
+  try{
+    var result = await _supabase.from("portfolios")
+      .select("data")
+      .eq("user_id", _currentUser.id)
+      .single();
+    if(result.error&&result.error.code!=="PGRST116") throw result.error;
+    if(result.data&&result.data.data){
+      var d = result.data.data;
+      if(d.assets)   assets  = d.assets;
+      if(d.alerts)   alerts  = d.alerts;
+      if(d.history)  history = d.history;
+      if(d.snapshots) localStorage.setItem("invertirAR_snapshots", JSON.stringify(d.snapshots));
+      render();
+      showToast("☁️ Cartera cargada desde la nube","var(--blue)");
+    } else {
+      // New user — upload local data if any
+      if(assets.length>0) saveCloudData();
+    }
+  }catch(e){ console.warn("Cloud load error:", e); }
+}
+
+function startAutoSync(){
+  if(_syncTimer) clearInterval(_syncTimer);
+  _syncTimer = setInterval(function(){
+    if(_currentUser) saveCloudData();
+  }, 60000); // every 60s
+}
+
+async function checkExistingSession(){
+  if(!initSupabase()) return;
+  try{
+    var result = await _supabase.auth.getSession();
+    if(result.data&&result.data.session&&result.data.session.user){
+      _currentUser = result.data.session.user;
+      updateAuthUI();
+      loadCloudData();
+      startAutoSync();
+    } else {
+      // Show auth modal on first visit if not skipped
+      if(!localStorage.getItem("sb_skipped")&&!localStorage.getItem("sb_url")){
+        // Don't force modal if no config yet — let them use local
+      } else if(localStorage.getItem("sb_url")&&!localStorage.getItem("sb_skipped")){
+        // Has config but no session — show login
+        setTimeout(showAuthModal, 1200);
+      }
+    }
+  }catch(e){ console.warn("Session check error:", e); }
+}
+
+// Override saveState to also sync to cloud
+var _origSaveState = null;
+function patchSaveStateForCloud(){
+  var orig = saveState;
+  saveState = function(){
+    orig();
+    if(_currentUser) saveCloudData();
+  };
+}
+
+// Add sync dot indicator to header
+function addSyncIndicator(){
+  var hdr = document.querySelector(".header-actions");
+  if(!hdr||document.getElementById("sync-dot")) return;
+  var dot = document.createElement("span");
+  dot.id="sync-dot";
+  dot.title="Sin sincronizar (iniciá sesión)";
+  dot.style.cssText="font-size:8px;color:var(--muted);cursor:default;padding:0 4px;align-self:center";
+  dot.textContent="●";
+  hdr.prepend(dot);
+}
+
+// 
+// CONTEXTUAL TOOLTIP SYSTEM
+// ══════════════════════════════════════════════════════════════
+
+const TAB_TOOLTIPS = {
+  "resumen": {
+    title: "📊 Resumen",
+    body: "Vista general de tu cartera en tiempo real. Muestra el valor total, ganancias, distribución entre mercado USA y Argentina, y cómo te fue vs el S&P 500.",
+    tip: "💡 El score de salud evalúa diversificación, liquidez y rendimiento vs inflación del 1 al 100."
+  },
+  "activos": {
+    title: "💼 Activos",
+    body: "Acá cargás y gestionás tus inversiones. Cada tarjeta muestra el P&L (ganancia/pérdida), el valor actual y una señal de compra/venta. Usá <strong style='color:#f0f6ff'>💸 Vender</strong> para registrar una venta con P&L automático.",
+    tip: "💡 Conectá Finnhub (gratis) para precios en tiempo real que se actualizan cada 30 segundos."
+  },
+  "señales": {
+    title: "🎯 Señales técnicas",
+    body: "RSI, MACD y medias móviles calculadas con datos reales de Alpha Vantage. Te dice si un activo está en zona de <span style='color:var(--green)'>compra</span>, <span style='color:var(--red)'>venta</span> o neutro.",
+    tip: "💡 RSI > 70 = posible sobrecompra. RSI < 30 = posible sobreventa. No son señales exactas, son referencias."
+  },
+  "graficos": {
+    title: "📈 Gráficos",
+    body: "TradingView integrado con velas japonesas, volumen e indicadores profesionales. Seleccioná un activo de tu cartera para ver su chart con tu precio de compra marcado.",
+    tip: "💡 Usá el Comparador (⚡) para ver dos o más acciones lado a lado en el mismo período."
+  },
+  "comparador": {
+    title: "⚡ Comparador",
+    body: "Compará el rendimiento de múltiples activos en el mismo gráfico y período de tiempo. Ideal para decidir entre dos opciones antes de invertir.",
+    tip: "💡 Elegí períodos iguales para comparaciones justas: todos a 3 meses o todos a 1 año."
+  },
+  "calendario": {
+    title: "📅 Calendario",
+    body: "Eventos que pueden afectar tus inversiones: earnings (resultados trimestrales), dividendos y datos macro como inflación o decisiones de tasas de la FED.",
+    tip: "💡 Los earnings de empresas como AAPL y MELI suelen mover el precio ±5% en un día."
+  },
+  "escenarios": {
+    title: "💸 Escenarios",
+    body: "Simulá el impacto de distintos tipos de cambio en tu cartera. Si el dólar sube 20%, ¿cuánto vale tu portafolio en pesos? Mové el slider y lo ves en tiempo real.",
+    tip: "💡 Útil para planificar cuánto necesitás si tenés gastos en pesos pero inversiones en dólares."
+  },
+  "sentimiento": {
+    title: "🌡️ Sentimiento",
+    body: "Fear & Greed Index del mercado global. Cuando todos tienen miedo (rojo) suele ser buen momento para comprar. Cuando hay codicia extrema (verde), el mercado puede estar caro.",
+    tip: "💡 'Sé codicioso cuando otros tienen miedo, y temeroso cuando otros son codiciosos' — Warren Buffett."
+  },
+  "glosario": {
+    title: "📚 Glosario",
+    body: "Definiciones de todos los términos que usamos en la app: CEDEAR, FCI, P&L, RSI, MACD, tipo de cambio MEP, y más. Ideal si estás empezando.",
+    tip: "💡 Buscá cualquier término con la barra de búsqueda. Ideal para cuando encontrás una palabra desconocida."
+  },
+  "mercado": {
+    title: "🌐 Mercado",
+    body: "Explorador de instrumentos disponibles en IOL: CEDEARs, acciones argentinas, FCI, bonos y más. Podés ver características de cada instrumento antes de invertir.",
+    tip: "💡 Los CEDEARs son la forma más simple de invertir en empresas como Apple o Google desde Argentina."
+  },
+  "noticias": {
+    title: "📰 Noticias",
+    body: "Noticias recientes de tus activos traídas de Finnhub. Mantenete informado sobre lo que pasa con las empresas en las que invertís.",
+    tip: "💡 Conectá tu API Key de Finnhub para ver noticias en tiempo real de cada ticker."
+  },
+  "ia": {
+    title: "🤖 Consejo IA",
+    body: "Chat con Claude AI que conoce tu cartera real. Podés preguntarle cualquier cosa: análisis de un activo, qué hacer con una posición, explicaciones de términos, estrategias para tu perfil.",
+    tip: "💡 El modo Research activa búsqueda en internet para datos actualizados del mercado."
+  },
+  "research": {
+    title: "🔍 Research",
+    body: "Panel de análisis profundo con búsqueda en internet en tiempo real. Ideal para investigar una empresa o sector antes de invertir.",
+    tip: "💡 Preguntá cosas como 'análisis fundamental de MercadoLibre 2025' o 'perspectivas del sector bancario argentino'."
+  },
+  "rebalanceo": {
+    title: "⚖️ Rebalanceo",
+    body: "Compara dónde está tu cartera hoy vs dónde querés que esté (targets %). Te dice exactamente qué activo comprar o vender para volver al balance deseado.",
+    tip: "💡 Rebalanceá cuando un activo se desvíe más del 5% de tu objetivo. Menos que eso no justifica comisiones."
+  },
+  "proyeccion": {
+    title: "🔮 Proyección",
+    body: "Simulador de interés compuesto. Ingresá tu capital actual, rendimiento anual esperado y plazo — te muestra cuánto tendrías y el desglose año por año.",
+    tip: "💡 Con 10% anual, tu dinero se duplica en ~7 años gracias al interés compuesto."
+  },
+  "calculadora": {
+    title: "🛒 Calculadora",
+    body: "Calculadora de compra para Argentina: ingresás cuántos pesos tenés y qué activo querés → te dice cuántas unidades podés comprar, con la comisión de IOL ya descontada.",
+    tip: "💡 Usá el tipo MEP para calcular cuánto vale tu inversión en dólares al tipo de cambio más real."
+  },
+  "historial": {
+    title: "📋 Historial",
+    body: "Registro completo de tus operaciones con P&L (ganancia/pérdida) real por cada venta, en USD y ARS. Incluye gráfico de rendimiento acumulado y resumen por mes.",
+    tip: "💡 Analizá tu win rate (% de operaciones ganadoras) para mejorar tu estrategia con el tiempo."
+  },
+  "alertas": {
+    title: "🔔 Alertas",
+    body: "Configurá notificaciones automáticas: te avisa con sonido y notificación del sistema cuando un activo sube o baja X% desde tu precio de compra.",
+    tip: "💡 Usá alertas de bajada para definir tu stop-loss mental y alertas de subida para tu take-profit."
+  }
+};
+
+var _tooltipTimer = null;
+
+function showTabTooltip(tabName, triggerEl){
+  var data = TAB_TOOLTIPS[tabName];
+  if(!data) return;
+  var panel = document.getElementById("ctx-tooltip");
+  document.getElementById("ctx-tooltip-title").textContent = data.title;
+  document.getElementById("ctx-tooltip-body").innerHTML   = data.body;
+  document.getElementById("ctx-tooltip-tip").innerHTML    = data.tip;
+  panel.style.display = "block";
+  // Position near trigger
+  var rect = triggerEl.getBoundingClientRect();
+  var top  = rect.bottom + 8;
+  var left = Math.min(rect.left, window.innerWidth - 320);
+  if(top + 180 > window.innerHeight) top = rect.top - 180;
+  panel.style.top  = top + "px";
+  panel.style.left = Math.max(8, left) + "px";
+  // Auto-hide after 6s
+  clearTimeout(_tooltipTimer);
+  _tooltipTimer = setTimeout(hideTabTooltip, 6000);
+}
+
+function hideTabTooltip(){
+  var panel = document.getElementById("ctx-tooltip");
+  if(panel) panel.style.display = "none";
+}
+
+// Inject ? buttons into tab buttons
+function injectTabHelpButtons(){
+  var tabs = document.querySelectorAll(".tab[onclick]");
+  tabs.forEach(function(tab){
+    var match = tab.getAttribute("onclick").match(/switchTab\(['"](\w+)['"]/);
+    if(!match) return;
+    var tabName = match[1];
+    if(!TAB_TOOLTIPS[tabName]) return;
+    if(tab.querySelector(".tab-help")) return; // already injected
+    var helpBtn = document.createElement("span");
+    helpBtn.className = "tab-help";
+    helpBtn.textContent = "?";
+    helpBtn.title = "Qué es " + tabName;
+    helpBtn.onclick = function(e){
+      e.stopPropagation();
+      showTabTooltip(tabName, helpBtn);
+    };
+    tab.appendChild(helpBtn);
+  });
+}
+
+// Hide tooltip when clicking elsewhere
+document.addEventListener("click", function(e){
+  if(!e.target.classList.contains("tab-help")) hideTabTooltip();
+});
+
+// 
 // DARK / LIGHT MODE
 // 
 function toggleTheme(){
@@ -3261,6 +4141,10 @@ async function requestNotifPermission(){
   _notifGranted = perm === "granted";
   updateNotifBtn();
   initTheme();
+  addSyncIndicator();
+  patchSaveStateForCloud();
+  checkExistingSession();
+  injectTabHelpButtons();
   if(_notifGranted){ showToast("✅ Notificaciones activadas. Te avisaremos cuando alguna alerta se dispare.","var(--green)"); }
   else { showToast("⚠️ Permiso denegado. Podés activarlo en la configuración del navegador.","var(--amber)"); }
 }
@@ -4946,11 +5830,123 @@ function renderFGHistory(data){
 // ONBOARDING
 // 
 const OB_STEPS=[
-  {icon:"🇦🇷",title:"Hecho para el inversor argentino",text:"InvertirAR es tu panel personal para gestionar CEDEARs, acciones, FCIs y más, con contexto local: tipo de cambio, inflación y riesgo país siempre presentes.",highlight:"💡 Todo tu dinero en un solo lugar, en tiempo real."},
-  {icon:"💼",title:"Agregá tus activos",text:"Ir a la pestaña <strong>Activos</strong> y tocar el botón <em>+ Agregar activo</em>. Ingresá el ticker, cantidad, precio de compra y precio actual. La app calculará tus ganancias automáticamente.",highlight:"🔑 Conectá tu API Key de Finnhub (gratis) para precios en tiempo real."},
-  {icon:"📈",title:"Gráficos con indicadores profesionales",text:"La pestaña <strong>Gráficos</strong> tiene TradingView integrado con velas japonesas, RSI, MACD, Bollinger Bands y más. Podés comparar acciones lado a lado en <strong>Comparador</strong>.",highlight:"⚡ Mismo análisis técnico que usan los traders profesionales."},
-  {icon:"🤖",title:"Consejo IA personalizado",text:"La pestaña <strong>Consejo IA</strong> analiza tu cartera y te da recomendaciones concretas. También podés hacerle preguntas libres: <em>¿Debería vender GGAL? ¿Qué pasa si el dólar sube 30%?</em>",highlight:"🧠 Powered by Claude · Respuestas en español con contexto argentino."},
-  {icon:"🔔",title:"Alertas y escenarios",text:"Creá alertas de precio en la pestaña <strong>Alertas</strong> — te avisará con sonido cuando un activo sube o baja X%. En <strong>Escenarios</strong> simulá el impacto de distintos tipos de cambio en tu cartera.",highlight:"💾 Tu cartera se guarda automáticamente — nunca perdés tus datos."},
+  {
+    icon:"👋",
+    title:"Bienvenido a InvertirAR",
+    text:"Tu panel inteligente de inversiones hecho para Argentina. En 5 pasos te mostramos todo lo que podés hacer.",
+    highlight:"",
+    demo:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+      <div style="background:rgba(0,214,143,0.08);border:1px solid rgba(0,214,143,0.2);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">📊</div>
+        <div style="font-size:11px;font-weight:800;color:var(--green)">RESUMEN</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:2px">Cartera en tiempo real</div>
+      </div>
+      <div style="background:rgba(77,159,255,0.08);border:1px solid rgba(77,159,255,0.2);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">💼</div>
+        <div style="font-size:11px;font-weight:800;color:var(--blue)">ACTIVOS</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:2px">CEDEARs, acciones, FCIs</div>
+      </div>
+      <div style="background:rgba(157,123,255,0.08);border:1px solid rgba(157,123,255,0.2);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">🤖</div>
+        <div style="font-size:11px;font-weight:800;color:var(--purple)">IA</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:2px">Análisis personalizado</div>
+      </div>
+      <div style="background:rgba(255,170,0,0.08);border:1px solid rgba(255,170,0,0.2);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;margin-bottom:4px">📋</div>
+        <div style="font-size:11px;font-weight:800;color:var(--amber)">HISTORIAL</div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:2px">P&L real por operación</div>
+      </div>
+    </div>`
+  },
+  {
+    icon:"💼",
+    title:"Agregá tu primera inversión",
+    text:"Tocá <strong>+ Agregar activo</strong> en la pestaña Activos. Elegí el tipo (CEDEAR, Acción AR, FCI…), ingresá el ticker, cuántas unidades tenés y a qué precio compraste.",
+    highlight:"",
+    demo:`<div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:14px;font-size:12px">
+      <div style="font-weight:800;color:#f0f6ff;margin-bottom:10px">Ejemplo de carga:</div>
+      <div style="display:grid;gap:8px">
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg2);border-radius:8px">
+          <span style="color:var(--muted2)">Tipo</span><strong style="color:var(--blue)">CEDEAR</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg2);border-radius:8px">
+          <span style="color:var(--muted2)">Ticker</span><strong style="color:#f0f6ff">AAPL</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg2);border-radius:8px">
+          <span style="color:var(--muted2)">Cantidad</span><strong style="color:#f0f6ff">2 unidades</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg2);border-radius:8px">
+          <span style="color:var(--muted2)">Precio compra</span><strong style="color:#f0f6ff">ARS $249.600</strong>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding:8px 10px;background:rgba(0,214,143,0.08);border-radius:8px;font-size:11px;color:var(--green)">
+        ✅ La app calcula tu P&L, % de cambio y posición en USD automáticamente
+      </div>
+    </div>`
+  },
+  {
+    icon:"💸",
+    title:"Registrá tus ventas y conocé tu P&L",
+    text:"Cuando vendés una posición, tocá <strong>💸 Vender</strong> en la tarjeta del activo. La app calcula automáticamente tu ganancia o pérdida neta, con la comisión IOL descontada.",
+    highlight:"",
+    demo:`<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:rgba(0,214,143,0.06);border:1px solid rgba(0,214,143,0.2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted2);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:1px">Ejemplo de venta</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+          <div>Compré: <strong>USD $180</strong></div>
+          <div>Vendí: <strong>USD $220</strong></div>
+          <div>Comisión IOL: <strong style="color:var(--amber)">-USD $1.10</strong></div>
+          <div>P&L neto: <strong style="color:var(--green)">+USD $38.90</strong></div>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:var(--muted2)">≈ ARS $46.680 al CCL actual</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted2);text-align:center">El historial guarda cada operación con fecha, precio y rendimiento acumulado</div>
+    </div>`
+  },
+  {
+    icon:"🤖",
+    title:"Tu asesor IA disponible 24/7",
+    text:"La pestaña <strong>Consejo IA</strong> analiza tu cartera real y responde preguntas en español con contexto argentino. Conectá tu API Key de Claude (gratis hasta cierto límite) para activarla.",
+    highlight:"",
+    demo:`<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:rgba(157,123,255,0.06);border:1px solid rgba(157,123,255,0.2);border-radius:10px;padding:12px;font-size:12px">
+        <div style="color:var(--muted2);margin-bottom:6px;font-size:11px">Preguntas frecuentes que podés hacer:</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="background:var(--card2);border-radius:8px;padding:8px 10px;color:var(--purple)">"¿Cuánto de mi cartera está dolarizado?"</div>
+          <div style="background:var(--card2);border-radius:8px;padding:8px 10px;color:var(--purple)">"¿Debería vender GGAL o mantener?"</div>
+          <div style="background:var(--card2);border-radius:8px;padding:8px 10px;color:var(--purple)">"¿Qué pasa si el dólar sube 30%?"</div>
+        </div>
+      </div>
+    </div>`
+  },
+  {
+    icon:"🔔",
+    title:"Alertas, señales y modo sin internet",
+    text:"Creá alertas de precio que te notifiquen cuando un activo sube o baja X%. La pestaña <strong>Señales</strong> muestra RSI, MACD y medias móviles para cada activo.",
+    highlight:"",
+    demo:`<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+      <div style="background:var(--card2);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:16px;margin-bottom:4px">🔔</div>
+        <div style="font-weight:800;color:#f0f6ff;margin-bottom:3px">Alertas</div>
+        <div style="color:var(--muted2)">Sonido + notificación del sistema cuando se activa</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:16px;margin-bottom:4px">🎯</div>
+        <div style="font-weight:800;color:#f0f6ff;margin-bottom:3px">Señales técnicas</div>
+        <div style="color:var(--muted2)">RSI, MACD, Golden Cross en tiempo real</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:16px;margin-bottom:4px">🛒</div>
+        <div style="font-weight:800;color:#f0f6ff;margin-bottom:3px">Calculadora</div>
+        <div style="color:var(--muted2)">"Tengo $X pesos, ¿qué puedo comprar?"</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:16px;margin-bottom:4px">💾</div>
+        <div style="font-weight:800;color:#f0f6ff;margin-bottom:3px">Auto-guardado</div>
+        <div style="color:var(--muted2)">Tus datos nunca se pierden, funciona sin internet</div>
+      </div>
+    </div>`
+  },
 ];
 let obCurrent=0;
 
@@ -4970,16 +5966,24 @@ function renderOBStep(){
   const s=OB_STEPS[obCurrent];
   const isLast=obCurrent===OB_STEPS.length-1;
   document.getElementById("ob-step-num").textContent=obCurrent+1;
-  document.getElementById("ob-content").innerHTML=`
-    <div class="ob-step-icon">${s.icon}</div>
-    <div class="ob-step-title">${s.title}</div>
-    <div class="ob-step-text">${s.text}</div>
-    <div class="ob-highlight">${s.highlight}</div>`;
+  // Progress bar
+  var pct = Math.round((obCurrent+1)/OB_STEPS.length*100);
+  document.getElementById("ob-content").innerHTML=
+    `<div style="height:3px;background:var(--border);border-radius:2px;margin-bottom:20px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width .4s ease;border-radius:2px"></div>
+    </div>`
+    +`<div class="ob-step-icon">${s.icon}</div>`
+    +`<div class="ob-step-title">${s.title}</div>`
+    +`<div class="ob-step-text">${s.text}</div>`
+    +(s.demo||"")
+    +(s.highlight?`<div class="ob-highlight" style="margin-top:14px">${s.highlight}</div>`:"");
   document.getElementById("ob-prev").style.display=obCurrent>0?"inline-block":"none";
   const nextBtn=document.getElementById("ob-next");
   nextBtn.textContent=isLast?"¡Empezar! 🚀":"Siguiente →";
   nextBtn.onclick=isLast?closeOnboarding:()=>obStep(1);
-  document.getElementById("ob-dots").innerHTML=OB_STEPS.map((_,i)=>`<div class="ob-dot ${i===obCurrent?"active":""}" onclick="obCurrent=${i};renderOBStep()"></div>`).join("");
+  document.getElementById("ob-dots").innerHTML=OB_STEPS.map((_,i)=>
+    `<div class="ob-dot ${i===obCurrent?"active":""}" onclick="obCurrent=${i};renderOBStep()" title="Paso ${i+1}"></div>`
+  ).join("");
 }
 
 // Map our tickers to TradingView symbols
@@ -6169,7 +7173,7 @@ function switchTab(name,btn){
     calcProyeccion();
   }
   if(name==="calculadora")initCalculadora();
-  if(name==="historial")renderHistory();
+  if(name==="historial"){renderHistory();}
   if(name==="alertas")renderAlerts();
   if(name==="señales"){initSignalesPanel();}
   if(name==="mercado"){initMercado();}
@@ -6203,9 +7207,63 @@ window.addEventListener("load",()=>{
   // Save button in header
   document.querySelector(".header-actions").insertAdjacentHTML("afterbegin",
     `<button class="btn btn-ghost" onclick="showOnboarding()" title="Tutorial" style="font-size:11px;padding:6px 12px">❓</button>`);
+  // Register Service Worker (enables PWA install prompt)
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("sw.js")
+      .then(function(reg){ console.log("✅ SW registrado:", reg.scope); })
+      .catch(function(err){ console.warn("⚠️ SW no registrado:", err); });
+  }
 });
 window.addEventListener("resize",()=>{renderBenchChart();renderInfChart();});
 document.addEventListener("click",e=>{const t=document.getElementById("tooltip");if(t&&!e.target.classList.contains("hint"))t.style.display="none";});
 </script>
+<!-- ══════════ CONTEXTUAL TOOLTIP PANEL ══════════ -->
+<div id="ctx-tooltip" style="display:none;position:fixed;z-index:9998;max-width:300px;pointer-events:none">
+  <div style="background:var(--card);border:1px solid var(--gold);border-radius:12px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-size:12px;line-height:1.7;color:var(--muted2)">
+    <div id="ctx-tooltip-title" style="font-weight:900;color:#f0f6ff;font-size:13px;margin-bottom:6px"></div>
+    <div id="ctx-tooltip-body"></div>
+    <div id="ctx-tooltip-tip" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--gold)"></div>
+  </div>
+</div>
+
+<!-- ══════════ SELL MODAL ══════════ -->
+<div id="sell-modal" style="display:none;position:fixed;inset:0;background:rgba(4,6,13,0.85);z-index:10000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--card);border:1px solid var(--border2);border-radius:var(--r);width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:16px;font-weight:900;color:#f0f6ff">💸 Registrar venta</div>
+      <button onclick="closeSellModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:18px 20px">
+      <div id="sell-asset-info" style="background:var(--card2);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:13px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field">
+          <label>Cantidad a vender</label>
+          <input id="sell-cantidad" type="number" min="0.01" step="0.01" oninput="updateSellPreview()" style="width:100%">
+        </div>
+        <div class="field">
+          <label>Precio de venta (USD)</label>
+          <input id="sell-precio" type="number" min="0.01" step="0.01" oninput="updateSellPreview()" style="width:100%">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="field">
+          <label>Fecha</label>
+          <input id="sell-fecha" type="date" style="width:100%">
+        </div>
+        <div class="field">
+          <label>Comisión %</label>
+          <input id="sell-comision" type="number" value="0.5" step="0.1" min="0" oninput="updateSellPreview()" style="width:100%">
+        </div>
+      </div>
+      <!-- P&L preview -->
+      <div id="sell-preview" style="border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;line-height:2;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button id="sell-confirm-btn" onclick="confirmSell()" class="btn-primary" style="flex:1">Confirmar venta</button>
+        <button onclick="closeSellModal()" class="btn-secondary">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
