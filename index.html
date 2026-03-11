@@ -36,6 +36,8 @@
   --teal: #00d4d8;
   --r: 16px;
   --r-sm: 10px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.18);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.32);
 }
 /* ── CONTEXTUAL TOOLTIPS ── */
 .tab-wrap { position: relative; display: inline-flex; align-items: center; }
@@ -121,6 +123,41 @@ body.light-mode ::-webkit-scrollbar-track { background:#f1f5f9; }
 body.light-mode ::-webkit-scrollbar-thumb { background:#cbd5e1; }
 body.light-mode .ob-dot { background:#cbd5e1; }
 body.light-mode .ob-dot.active { background:#c47f00; }
+/* Glosario */
+body.light-mode .glosario-word { color:#0f172a !important; }
+body.light-mode .glosario-def { color:#334155; }
+body.light-mode .glosario-header:hover { background:rgba(0,0,0,0.03); }
+body.light-mode .glosario-term { border-color:#e2e8f0; }
+body.light-mode .glosario-example { background:#fefce8; border-color:#c47f00; color:#0f172a; }
+body.light-mode .glosario-cat-btn { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
+body.light-mode .glosario-cat-btn.active { background:#fef9c3; border-color:#c47f00; color:#c47f00; }
+body.light-mode .glosario-chevron { color:#64748b; }
+/* Asset cards */
+body.light-mode [style*="background:var(--card2)"] { background:#f8fafc !important; }
+body.light-mode [style*="color:#f0f6ff"] { color:#0f172a !important; }
+body.light-mode [style*="color:var(--muted2)"] { color:#334155 !important; }
+/* Stat cards */
+body.light-mode .stat-card { background:#ffffff; border-color:#e2e8f0; }
+/* Table rows */
+body.light-mode tr:nth-child(even) { background:#f8fafc; }
+body.light-mode th { background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+body.light-mode td { border-color:#e2e8f0; color:#0f172a; }
+/* Panels */
+body.light-mode .panel { background:transparent; }
+/* Modal */  
+body.light-mode .modal-overlay { background:rgba(15,23,42,0.6); }
+body.light-mode #ctx-tooltip > div { background:#ffffff; border-color:#c47f00; }
+body.light-mode #ctx-tooltip-title { color:#0f172a; }
+body.light-mode #ctx-tooltip-body { color:#334155; }
+body.light-mode #ctx-tooltip-tip { color:#c47f00; border-color:#e2e8f0; }
+/* Auth modal tabs */
+body.light-mode #auth-tab-login, body.light-mode #auth-tab-register { color:#0f172a; }
+/* Toast */
+body.light-mode .toast-item { background:#ffffff; border-color:#e2e8f0; color:#0f172a; box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+/* Noise off in light mode */
+body.light-mode::before { opacity:0.1; }
+/* Scrollbar in light */
+body.light-mode::-webkit-scrollbar-thumb { background:#cbd5e1; }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--text);font-family:'Cabinet Grotesk',sans-serif;min-height:100vh;overflow-x:hidden}
@@ -460,7 +497,7 @@ body.fullscreen-active {
 .glosario-term:last-child{border-bottom:none}
 .glosario-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;cursor:pointer;transition:background 0.15s;gap:12px}
 .glosario-header:hover{background:rgba(255,255,255,0.02)}
-.glosario-word{font-size:14px;font-weight:800;color:#f0f6ff;display:flex;align-items:center;gap:8px}
+.glosario-word{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}
 .glosario-cat-tag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:0.5px;text-transform:uppercase}
 .glosario-preview{font-size:12px;color:var(--muted2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none}
 .glosario-chevron{color:var(--muted);font-size:12px;transition:transform 0.2s;flex-shrink:0}
@@ -2233,7 +2270,7 @@ function renderAssets(){
         <div style="font-size:12px;color:var(--muted2);line-height:1.7">
           Los precios que ves ahora son los que ingresaste manualmente. Para ver los precios reales del mercado, conectá tu API Key de <strong style="color:var(--text)">Finnhub</strong> (gratis) en la barra de arriba. Los datos se actualizan automáticamente cada 30 segundos.
         </div>
-        <button onclick="document.querySelector('.api-strip').scrollIntoView({behavior:'smooth'})" style="margin-top:8px;background:var(--amber);color:#04060d;border:none;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif">🔑 Conectar Finnhub gratis →</button>
+        <button onclick="document.getElementById('api-strip-bar').scrollIntoView({behavior:'smooth'})" style="margin-top:8px;background:var(--amber);color:#04060d;border:none;border-radius:8px;padding:6px 14px;font-size:11px;font-weight:800;cursor:pointer;font-family:'Cabinet Grotesk',sans-serif">🔑 Conectar Finnhub gratis →</button>
       </div>
     </div>` : "";
 
@@ -2241,7 +2278,7 @@ function renderAssets(){
     document.getElementById("asset-list").innerHTML = `
       <div style="text-align:center;padding:48px 24px;border:2px dashed var(--border2);border-radius:16px;margin-top:8px">
         <div style="font-size:48px;margin-bottom:16px">🌱</div>
-        <div style="font-size:18px;font-weight:900;color:#f0f6ff;margin-bottom:8px">Tu cartera está vacía</div>
+        <div style="font-size:18px;font-weight:900;color:var(--text);margin-bottom:8px">Tu cartera está vacía</div>
         <div style="font-size:13px;color:var(--muted2);line-height:1.8;max-width:340px;margin:0 auto 20px">
           Empezá agregando tu primer activo. Si aún no compraste nada, podés agregar tus objetivos de inversión para practicar.
         </div>
@@ -3795,7 +3832,15 @@ function initSupabase(){
   var cfg = getSBConfig();
   if(!cfg.url||!cfg.key) return false;
   try{
-    _supabase = window.supabase.createClient(cfg.url, cfg.key);
+    // persistSession:true keeps the user logged in across page reloads
+    _supabase = window.supabase.createClient(cfg.url, cfg.key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: localStorage
+      }
+    });
     return true;
   }catch(e){ console.warn("Supabase init error:", e); return false; }
 }
@@ -3999,15 +4044,20 @@ async function loadCloudData(){
     if(result.error&&result.error.code!=="PGRST116") throw result.error;
     if(result.data&&result.data.data){
       var d = result.data.data;
-      if(d.assets)   assets  = d.assets;
-      if(d.alerts)   alerts  = d.alerts;
-      if(d.history)  history = d.history;
-      if(d.snapshots) localStorage.setItem("invertirAR_snapshots", JSON.stringify(d.snapshots));
+      // Cloud wins — replace local with cloud data
+      if(Array.isArray(d.assets))   { assets  = d.assets;  localStorage.setItem("invertirAR_assets", JSON.stringify(assets)); }
+      if(Array.isArray(d.alerts))   { alerts  = d.alerts;  localStorage.setItem("invertirAR_alerts", JSON.stringify(alerts)); }
+      if(Array.isArray(d.history))  { history = d.history; localStorage.setItem("invertirAR_history", JSON.stringify(history)); }
+      if(Array.isArray(d.snapshots)) localStorage.setItem("invertirAR_snapshots", JSON.stringify(d.snapshots));
       render();
-      showToast("☁️ Cartera cargada desde la nube","var(--blue)");
+      var ts = d.updated ? new Date(d.updated).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}) : "";
+      showToast("☁️ Cartera sincronizada" + (ts?" · "+ts:""), "var(--blue)");
     } else {
-      // New user — upload local data if any
-      if(assets.length>0) saveCloudData();
+      // No cloud data — upload whatever is local
+      if(assets.length>0||history.length>0){
+        await saveCloudData();
+        showToast("☁️ Datos locales subidos a la nube","var(--green)");
+      }
     }
   }catch(e){ console.warn("Cloud load error:", e); }
 }
@@ -4043,11 +4093,13 @@ async function checkExistingSession(){
 // Override saveState to also sync to cloud
 var _origSaveState = null;
 function patchSaveStateForCloud(){
+  if(typeof saveState !== "function"){ console.warn("saveState not ready"); return; }
   var orig = saveState;
   saveState = function(){
     orig();
     if(_currentUser) saveCloudData();
   };
+  _origSaveState = orig;
 }
 
 // Add sync dot indicator to header
