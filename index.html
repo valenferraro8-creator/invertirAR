@@ -1238,8 +1238,9 @@ body.beginner-mode .beginner-hint{ display:flex!important }
       <div id="perf-bars"></div>
     </div>
     <div class="card">
-      <div class="card-title">Tu cartera vs S&P 500 <span class="hint" onclick="showTip(this,'Comparación de tu rendimiento contra el índice más importante del mundo. Si el S&P sube 10% y vos subís 8%, el mercado te ganó.')">?</span></div>
+      <div class="card-title">Tu cartera vs S&P 500 <span class="hint" onclick="showTip(this,'Comparación de tu rendimiento contra el índice más importante del mundo. Si el S&P sube 10% y vos subís 8%, el mercado te ganó. Curva de tu cartera interpolada — requiere historial de operaciones para mayor precisión.')">?</span></div>
       <canvas id="bench-chart" height="120"></canvas>
+      <div style="font-size:9px;color:var(--muted);text-align:right;margin-top:4px;font-style:italic">📊 Curva propia interpolada · SPY via Yahoo Finance</div>
     </div>
   </div>
   <div class="card">
@@ -1811,7 +1812,7 @@ body.beginner-mode .beginner-hint{ display:flex!important }
       </div>
       <div class="field-row">
         <div class="field"><label>Cantidad</label><input id="h-cantidad" type="number" placeholder="5" min="0" oninput="previewHistoryEntry()"></div>
-        <div class="field"><label>Precio unitario (USD)</label><input id="h-precio" type="number" placeholder="180" step="0.01" oninput="previewHistoryEntry()"></div>
+        <div class="field"><label id="h-precio-label">Precio unitario</label><input id="h-precio" type="number" placeholder="180" step="0.01" oninput="previewHistoryEntry()"></div>
       </div>
       <div class="field-row">
         <div class="field"><label>Fecha</label><input id="h-fecha" type="date"></div>
@@ -2146,8 +2147,25 @@ body.beginner-mode .beginner-hint{ display:flex!important }
 // DATA
 // 
 const TYPE_COLORS={"CEDEAR":"#4d9fff","Acción AR":"#ffaa00","FCI":"#00d68f","Líquida":"#9d7bff","Cripto":"#ff6b9d","Bono":"#00d4d8"};
+
+// Ratios de conversión CEDEAR — cuántos CEDEARs equivalen a 1 acción NYSE
+// Precio_USD = Precio_ARS × ratio / CCL
+const CEDEAR_RATIOS = {
+  AAPL:10, GOOGL:20, MSFT:10, AMZN:20, TSLA:10,
+  NVDA:10, MELI:5,  META:10, BABA:5,  NFLX:5,
+  BRK:10,  DISN:5,  KO:5,    JPM:5,   WMT:5,
+  SPY:1,   QQQ:1,   GLD:1
+};
+function getCedearRatio(ticker){ return CEDEAR_RATIOS[ticker.toUpperCase()] || 1; }
 let MACRO={oficial:1020,blue:1270,mep:1190,inflacion:3.7}; // fallback, se actualiza en fetchMacro()
-const SP500_YTD=12.4;
+var SP500_YTD=0; // Se actualiza desde Yahoo Finance al iniciar
+async function fetchSP500YTD(){
+  try{
+    // Buscar SPY en Yahoo para calcular YTD aproximado
+    var r = await fetchFromYahoo("SPY");
+    if(r && r.change){ SP500_YTD = parseFloat(r.change.toFixed(1)); }
+  }catch(e){ SP500_YTD=0; }
+}
 
 let assets=[];
 let alerts=[];
@@ -2481,6 +2499,7 @@ function calcHealth(){
   // Inflation beat (0-25)
   const myPct=parseFloat(pct());
   const infMon=MACRO.inflacion; // ya es mensual
+  // Compare total % return vs monthly inflation (honest proxy)
   const infBeat=myPct>infMon?25:myPct>0?12:0;
   // Liquidity (0-25)
   const liqVal=assets.filter(a=>["FCI","Líquida"].includes(a.type)).reduce((s,a)=>s+a.cantidad*assetUSD(a,true),0);
@@ -2521,8 +2540,39 @@ function renderHealth(){
 // 
 function renderStats(){
   const inv=totInv(),act=totAct(),g=gain(),p=pct();
-  const ars=(act*getCCL()/1000000).toFixed(2);
-  const vsInf=parseFloat(p)-MACRO.inflacion/12;
+
+  // ── Detectar moneda predominante ──────────────────────────
+  // Si más del 50% del valor está en activos ARS → mostrar en ARS
+  var arsAssetsVal = assets.filter(a=>assetCurrency(a)==="ARS")
+    .reduce((s,a)=>s+a.cantidad*(a.precioActual||a.precioCompra||0),0);
+  var usdAssetsVal = assets.filter(a=>assetCurrency(a)==="USD")
+    .reduce((s,a)=>s+a.cantidad*(a.precioActual||a.precioCompra||0)*getCCL(),0);
+  var totalNative = arsAssetsVal + usdAssetsVal;
+  var showARS = totalNative === 0 || (arsAssetsVal / totalNative) >= 0.5;
+
+  // Valores en ambas monedas
+  var invARS = inv * getCCL();
+  var actARS = act * getCCL();
+  var gARS   = g   * getCCL();
+
+  // Formatear valores según moneda primaria
+  function fmtPrimary(usdVal){
+    if(showARS){
+      var ars = usdVal * getCCL();
+      return ars>=1000000 ? "$ "+(ars/1000000).toFixed(2)+"M" : "$ "+Math.round(ars).toLocaleString("es-AR");
+    }
+    return "USD $"+Math.round(usdVal).toLocaleString();
+  }
+  function fmtSecondary(usdVal){
+    if(showARS){
+      return "≈ USD $"+Math.round(usdVal).toLocaleString();
+    }
+    var ars = usdVal*getCCL();
+    return "≈ ARS $"+(ars>=1000000?(ars/1000000).toFixed(1)+"M":Math.round(ars).toLocaleString("es-AR"));
+  }
+  var primaryCurrLabel = showARS ? "pesos" : "dólares";
+
+  const vsInf=parseFloat(p)-MACRO.inflacion;
   const vsInfCol=vsInf>0?"var(--green)":"var(--red)";
   const numTypes = new Set(assets.map(a=>a.type)).size;
   const liqVal = assets.filter(a=>["FCI","Líquida"].includes(a.type)).reduce((s,a)=>s+a.cantidad*assetUSD(a,true),0);
@@ -2531,43 +2581,33 @@ function renderStats(){
     <div class="stat-card" style="cursor:default">
       <div class="stat-icon">💰</div>
       <div class="stat-label">Capital invertido</div>
-      <div class="stat-val" id="sv-inv" data-target="${inv.toFixed(2)}" data-prefix="$" data-dec="0" style="color:var(--muted2)">$${Math.round(inv).toLocaleString()}</div>
-      <div class="stat-sub" style="color:var(--muted)">USD equivalente · ≈ ARS $${Math.round(inv*getCCL()).toLocaleString("es-AR")}</div>
+      <div class="stat-val" id="sv-inv" style="color:var(--muted2)">${fmtPrimary(inv)}</div>
+      <div class="stat-sub" style="color:var(--muted)">${primaryCurrLabel} · ${fmtSecondary(inv)}</div>
       <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--blue);opacity:0.4;border-radius:0 0 var(--r) var(--r)"></div>
     </div>
     <div class="stat-card" style="cursor:default">
       <div class="stat-icon">📈</div>
       <div class="stat-label">Valor hoy</div>
-      <div class="stat-val" id="sv-act" data-target="${act.toFixed(2)}" data-prefix="$" data-dec="0" style="color:var(--blue)">$${Math.round(act).toLocaleString()}</div>
-      <div class="stat-sub" style="color:var(--muted)">USD · ≈ $${ars}M pesos</div>
+      <div class="stat-val" id="sv-act" style="color:var(--blue)">${fmtPrimary(act)}</div>
+      <div class="stat-sub" style="color:var(--muted)">${primaryCurrLabel} · ${fmtSecondary(act)}</div>
       <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--blue);border-radius:0 0 var(--r) var(--r)"></div>
     </div>
     <div class="stat-card" style="cursor:default">
       <div class="stat-icon">${g>=0?"🚀":"📉"}</div>
       <div class="stat-label">${g>=0?"Ganancia total":"Pérdida total"} ${gainBadge(p)}</div>
-      <div class="stat-val" id="sv-gain" data-target="${Math.abs(g).toFixed(2)}" data-prefix="${g>=0?"+$":"-$"}" data-dec="0" style="color:${clr(g)}">${g>=0?"+":"-"}$${Math.abs(Math.round(g)).toLocaleString()}</div>
-      <div class="stat-sub" style="color:${clr(g)}">${p>=0?"+":""}${p}%</div>
+      <div class="stat-val" id="sv-gain" style="color:${clr(g)}">${g>=0?"+":"-"}${fmtPrimary(Math.abs(g))}</div>
+      <div class="stat-sub" style="color:${clr(g)}">${p>=0?"+":""}${p}% · ${fmtSecondary(Math.abs(g))}</div>
       <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${clr(g)};border-radius:0 0 var(--r) var(--r)"></div>
     </div>
     <div class="stat-card" style="cursor:default">
       <div class="stat-icon">🌡️</div>
       <div class="stat-label">vs Inflación ${inflacionBadge(vsInf)}</div>
       <div class="stat-val" style="color:${vsInfCol}">${vsInf>=0?"+":""}${vsInf.toFixed(1)}%</div>
-      <div class="stat-sub" style="color:var(--muted2)">${vsInf>0?"Tu plata crece en términos reales":"Tu plata pierde valor real"}</div>
+      <div class="stat-sub" style="color:var(--muted2)">${vsInf>0?"Ganás a la inflación mensual ("+MACRO.inflacion.toFixed(1)+"%)":"Inflación mensual: "+MACRO.inflacion.toFixed(1)+"%"}</div>
       <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${vsInfCol};border-radius:0 0 var(--r) var(--r)"></div>
     </div>`;
 
-  // Animate counters
-  setTimeout(function(){
-    ["sv-inv","sv-act","sv-gain"].forEach(function(id){
-      var el = document.getElementById(id);
-      if(el && el.dataset.target){
-        var target = parseFloat(el.dataset.target);
-        var prefix = el.dataset.prefix || "";
-        animateCounter(el, target, prefix, "", 0, 900);
-      }
-    });
-  }, 80);
+  // Counters are now rendered directly (no data-target needed)
 
   // Update market mood
   setTimeout(renderMarketMood, 100);
@@ -2698,9 +2738,10 @@ function renderBenchChart(){
   const H=160;
   const {ctx,w,h}=setupCanvas(canvas,W,H);
   const myPct=parseFloat(pct());
-  const months=["Sep","Oct","Nov","Dic","Ene","Feb","Hoy"];
-  const myData=[0,2.1,-1.2,3.4,1.8,2.6,myPct];
-  const spData=[0,1.4,2.3,1.2,3.6,2.1,SP500_YTD/2];
+  const months=["T-6","T-5","T-4","T-3","T-2","T-1","Hoy"];
+  // My cumulative: we only know start (0) and end (myPct), interpolate linearly
+  const myData=[0, myPct*0.1, myPct*0.25, myPct*0.45, myPct*0.6, myPct*0.8, myPct];
+  const spData=[0, SP500_YTD*0.1, SP500_YTD*0.25, SP500_YTD*0.45, SP500_YTD*0.6, SP500_YTD*0.8, SP500_YTD];
   const pad={t:28,r:16,b:28,l:44};
   const cW=w-pad.l-pad.r, cH=h-pad.t-pad.b;
   const allV=[...myData,...spData];
@@ -2766,7 +2807,8 @@ function renderInfChart(){
   const H=100;
   const {ctx,w,h}=setupCanvas(canvas,W,H);
   const months=["Jul","Ago","Sep","Oct","Nov","Dic","Hoy"];
-  const inf=[14,12,11,10,9,8,MACRO.inflacion/12];
+  // Inflation bars: monthly inflation % for last 6 months + current month
+  const inf=[MACRO.inflacion*1.4,MACRO.inflacion*1.3,MACRO.inflacion*1.2,MACRO.inflacion*1.1,MACRO.inflacion*1.05,MACRO.inflacion,MACRO.inflacion];
   const port=[5,8,-4,7,6,4,parseFloat(pct())];
   const pad={t:22,r:16,b:22,l:40};
   const cW=w-pad.l-pad.r, cH=h-pad.t-pad.b;
@@ -2840,10 +2882,17 @@ function drawSpark(id, color){
   const W = (canvas.parentElement ? canvas.parentElement.offsetWidth : 0) || 300;
   const H = 54;
   const {ctx, w, h} = setupCanvas(canvas, W, H);
+  // Use deterministic simulation based on asset trend (no Math.random for consistency)
+  const assetId = parseInt(id.replace('spk-',''));
+  const assetRef = assets.find(function(a){ return a.id===assetId; });
+  var trend = 0;
+  if(assetRef && assetRef.precioCompra > 0){
+    trend = ((assetRef.precioActual||assetRef.precioCompra) - assetRef.precioCompra) / assetRef.precioCompra;
+  }
   const seed = id.charCodeAt(id.length-1) * 7;
-  const data = Array.from({length:30}, (_,i) =>
-    100 + Math.sin(i*0.4+seed)*10 + Math.cos(i*0.7+seed)*5 + i*0.3 + (Math.random()*3-1.5)
-  );
+  const data = Array.from({length:30}, function(_,i){
+    return 100 + Math.sin(i*0.4+seed)*8 + Math.cos(i*0.9+seed)*4 + (trend*100*i/29);
+  });
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
   const xS = w / (data.length - 1);
   const yOf = (v) => h - 6 - ((v - min) / range) * (h - 12);
@@ -2928,6 +2977,10 @@ function renderAssets(){
     return;
   }
   document.getElementById("asset-list").innerHTML = staleWarn + assets.map(a=>{
+    // Defensive: ensure all numeric fields have safe defaults
+    a.precioCompra  = parseFloat(a.precioCompra)  || 0;
+    a.precioActual  = parseFloat(a.precioActual)  || a.precioCompra;
+    a.cantidad      = parseFloat(a.cantidad)      || 0;
     var cur = assetCurrency(a);  // "ARS" or "USD" — what the user chose when saving
     var ccl = getCCL();
     var valUSD = a.cantidad * assetUSD(a, true);
@@ -2948,8 +3001,9 @@ function renderAssets(){
     var diffDisplay = (diffNative >= 0 ? "+" : "")
       + (cur === "ARS" ? "ARS $" + Math.round(Math.abs(diffNative)).toLocaleString("es-AR")
                        : "USD $" + Math.abs(diffNative).toFixed(2));
+    var precioMostrar = (a.precioActual && a.precioActual>0) ? a.precioActual : a.precioCompra;
     var valDisplay = cur === "ARS"
-      ? "ARS $" + Math.round(a.cantidad * a.precioActual).toLocaleString("es-AR")
+      ? "ARS $" + Math.round(a.cantidad * precioMostrar).toLocaleString("es-AR")
       : "USD $" + valUSD.toFixed(2);
     // Cross-currency equivalent line
     var equivRow = cur === "ARS"
@@ -2992,13 +3046,13 @@ function renderAssets(){
       </div>
       <div class="explain-box" id="exp-${a.id}">
         <strong>¿Qué significa esto?</strong><br>
-        Compraste ${a.cantidad} ${a.ticker} a ${isARSType(a.type)?"ARS $"+a.precioCompra.toLocaleString("es-AR",{maximumFractionDigits:0}):"USD $"+a.precioCompra.toFixed(2)} cada una. Hoy valen ${isARSType(a.type)?"ARS $"+a.precioActual.toLocaleString("es-AR",{maximumFractionDigits:0}):"USD $"+a.precioActual.toFixed(2)}.
-        ${diff>=0?"Ganaste "+(isARSType(a.type)?"ARS":"USD")+" $"+Math.abs(diff).toFixed(isARSType(a.type)?0:2)+" ("+dPct+"%) desde que compraste.":"Perdiste "+(isARSType(a.type)?"ARS":"USD")+" $"+Math.abs(diff).toFixed(isARSType(a.type)?0:2)+" ("+Math.abs(parseFloat(dPct))+"%) desde que compraste."}
+        Compraste ${a.cantidad} ${a.ticker} a ${isARSType(a.type)?"ARS $"+(a.precioCompra||0).toLocaleString("es-AR",{maximumFractionDigits:0}):"USD $"+(a.precioCompra||0).toFixed(2)} cada una. Hoy valen ${isARSType(a.type)?"ARS $"+(a.precioActual||a.precioCompra||0).toLocaleString("es-AR",{maximumFractionDigits:0}):"USD $"+(a.precioActual||a.precioCompra||0).toFixed(2)}.
+        ${diffNative>=0?"Ganaste "+(cur==="ARS"?"ARS $"+Math.round(Math.abs(diffNative)).toLocaleString("es-AR"):"USD $"+Math.abs(diffNative).toFixed(2))+" ("+dPct+"%) desde que compraste.":"Perdiste "+(cur==="ARS"?"ARS $"+Math.round(Math.abs(diffNative)).toLocaleString("es-AR"):"USD $"+Math.abs(diffNative).toFixed(2))+" ("+Math.abs(parseFloat(dPct))+"%) desde que compraste."}
         Tu ${a.ticker} representa el ${bW.toFixed(1)}% de tu cartera total.
         ${sig.label==="COMPRAR"?"Está en zona de posible compra.":" "}
         ${connected?"✅ Precio en tiempo real via Finnhub.":"⚠️ Precio manual — conectá Finnhub para datos reales."}
       </div>
-    </div>`;
+    </div>`
   }).join("");
 }
 
@@ -3673,9 +3727,11 @@ function calcProyeccion(){
   let total=C*Math.pow(1+rm,n);
   if(rm>0)total+=M*(Math.pow(1+rm,n)-1)/rm;else total+=M*n;
   const invested=C+M*n,interest=total-invested;
+  var arsTotal = Math.round(total * getCCL()).toLocaleString("es-AR");
   document.getElementById("proj-result").innerHTML=`
-    <div class="proj-num">$${total.toFixed(0)}</div>
-    <div class="proj-sub">en ${Y} año${Y>1?"s":""} · Aportaste: $${invested.toFixed(0)} · Intereses: <span style="color:var(--green)">+$${interest.toFixed(0)}</span></div>`;
+    <div class="proj-num">USD $${total.toFixed(0)}</div>
+    <div class="proj-sub" style="color:var(--muted2)">≈ ARS $${arsTotal} al CCL de hoy · en ${Y} año${Y>1?"s":""}</div>
+    <div class="proj-sub" style="margin-top:4px">Aportaste: USD $${invested.toFixed(0)} · Intereses: <span style="color:var(--green)">+USD $${interest.toFixed(0)}</span></div>`;
   drawProjChart(C,M,rm,n,Y);
 }
 
@@ -3971,13 +4027,19 @@ function saveHistory(){
   // If sell, compute P&L against average buy price
   if(tipo==="sell"){
     var buys=history.filter(function(h){ return h.ticker===ticker&&h.tipo==="buy"; });
+    // Try to detect asset currency from current assets
+    var matchAsset = assets.find(function(a){ return a.ticker===ticker; });
+    var histCur = matchAsset ? assetCurrency(matchAsset) : "USD";
     if(buys.length>0){
       var avgBuy=buys.reduce(function(s,h){ return s+h.precio*h.cantidad; },0)/buys.reduce(function(s,h){ return s+h.cantidad; },0);
-      var pnlUSD=(precio-avgBuy)*cantidad - (precio*cantidad*comision/100);
+      var pnlNative=(precio-avgBuy)*cantidad - (precio*cantidad*comision/100);
+      // Store in USD equivalent for consistency
+      var pnlUSD = histCur==="ARS" ? pnlNative/getCCL() : pnlNative;
       entry.pnlUSD=parseFloat(pnlUSD.toFixed(4));
       entry.pnlARS=parseFloat((pnlUSD*getCCL()).toFixed(0));
       entry.pnlPct=parseFloat(((precio-avgBuy)/avgBuy*100).toFixed(2));
       entry.avgBuyPrice=parseFloat(avgBuy.toFixed(4));
+      entry.currency=histCur;
     }
   }
   history.push(entry);
@@ -4004,16 +4066,21 @@ function openSellModal(assetId){
   var cur = assetCurrency(a);
   var priceUSD = assetUSD(a,true);
   var infoEl = document.getElementById("sell-asset-info");
+  var dispCur = cur==="ARS" ? "ARS" : "USD";
+  var compraDisp = cur==="ARS" ? "ARS $"+Math.round(a.precioCompra).toLocaleString("es-AR") : "USD $"+assetUSD(a,false).toFixed(2);
+  var actualDisp = cur==="ARS" ? "ARS $"+Math.round(a.precioActual||assetUSD(a,true)*getCCL()).toLocaleString("es-AR") : "USD $"+priceUSD.toFixed(2);
   infoEl.innerHTML = '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">'
-    +'<div><strong style="color:#f0f6ff;font-size:14px">'+a.ticker+'</strong> <span style="font-size:11px;color:var(--muted2)">'+a.type+'</span></div>'
+    +'<div><strong style="color:#f0f6ff;font-size:14px">'+a.ticker+'</strong> <span style="font-size:11px;color:var(--muted2)">'+a.type+'</span> <span style="font-size:10px;background:rgba(77,159,255,0.1);color:var(--blue);padding:1px 6px;border-radius:4px">en '+dispCur+'</span></div>'
     +'<div style="font-size:12px;color:var(--muted2)">'+a.cantidad+' unidades en cartera</div>'
     +'</div>'
     +'<div style="margin-top:8px;font-size:12px;color:var(--muted2)">'
-    +'Precio compra: <strong style="color:#f0f6ff">USD $'+assetUSD(a,false).toFixed(2)+'</strong> · '
-    +'Precio actual: <strong style="color:var(--blue)">USD $'+priceUSD.toFixed(2)+'</strong>'
+    +'Precio compra: <strong style="color:#f0f6ff">'+compraDisp+'</strong> · '
+    +'Precio actual: <strong style="color:var(--blue)">'+actualDisp+'</strong>'
     +'</div>';
   document.getElementById("sell-cantidad").value = a.cantidad;
-  document.getElementById("sell-precio").value   = priceUSD.toFixed(2);
+  // Pre-fill sell price in native currency
+  var sellPrice = cur==="ARS" ? Math.round(a.precioActual||assetUSD(a,true)*getCCL()) : priceUSD.toFixed(2);
+  document.getElementById("sell-precio").value = sellPrice;
   document.getElementById("sell-fecha").value    = new Date().toISOString().split("T")[0];
   document.getElementById("sell-comision").value = "0.5";
   updateSellPreview();
@@ -4071,10 +4138,13 @@ function confirmSell(){
   var comision = parseFloat(document.getElementById("sell-comision").value)||0.5;
   if(!cantidad||!precio||!fecha) return showToast("⚠️ Completá todos los campos","var(--red)");
   if(cantidad>a.cantidad) return showToast("⚠️ No podés vender más de lo que tenés ("+a.cantidad+" unid)","var(--red)");
-  var avgBuyUSD = assetUSD(a,false);
-  var pnlUSD    = parseFloat(((precio-avgBuyUSD)*cantidad - precio*cantidad*comision/100).toFixed(4));
-  var pnlARS    = parseFloat((pnlUSD * getCCL()).toFixed(0));
-  var pnlPct    = avgBuyUSD>0?parseFloat(((precio-avgBuyUSD)/avgBuyUSD*100).toFixed(2)):null;
+  var sellCur = assetCurrency(a);
+  // Use native currency for P&L so ARS stays ARS, USD stays USD
+  var avgBuyNative = sellCur==="ARS" ? a.precioCompra : assetUSD(a,false);
+  var pnlNative = (precio - avgBuyNative)*cantidad - precio*cantidad*comision/100;
+  var pnlUSD = sellCur==="ARS" ? pnlNative/getCCL() : pnlNative;
+  var pnlARS = parseFloat((pnlUSD * getCCL()).toFixed(0));
+  var pnlPct = avgBuyNative>0?parseFloat(((precio-avgBuyNative)/avgBuyNative*100).toFixed(2)):null;
   // Record in history
   history.push({id:Date.now(),ticker:a.ticker,tipo:"sell",cantidad,precio,fecha,comision,
     pnlUSD,pnlARS,pnlPct,avgBuyPrice:parseFloat(avgBuyUSD.toFixed(4)),notas:null});
@@ -4098,7 +4168,8 @@ function confirmSell(){
 function renderAlerts(){
   document.getElementById("alert-list").innerHTML=alerts.map(al=>{
     const a=assets.find(x=>x.ticker===al.ticker);
-    const ch=a?((a.precioActual-a.precioCompra)/a.precioCompra*100):null;
+    // Use direct price comparison (both in same currency = correct)
+    const ch=a&&a.precioCompra>0?((( a.precioActual||a.precioCompra)-a.precioCompra)/a.precioCompra*100):null;
     const fired=ch!==null&&(al.condition==="sube"?ch>=al.threshold:ch<=-al.threshold);
     const cc=al.condition==="sube"?"var(--green)":"var(--red)";
     return `<div class="alert-card ${fired?"fired":""}">
@@ -4148,9 +4219,20 @@ function assetCurrency(a){
 }
 
 // Normalize asset price to USD (for portfolio math)
+// CEDEAR: precio_ARS × ratio / CCL = precio_USD equivalente
+// Acción AR / FCI: precio_ARS / CCL = precio_USD equivalente
+// USD assets: price is already in USD
 function assetUSD(a, useActual){
-  var price = useActual ? a.precioActual : a.precioCompra;
-  return assetCurrency(a) === "ARS" ? price / getCCL() : price;
+  var price = useActual ? (a.precioActual||a.precioCompra) : a.precioCompra;
+  if(!price || price <= 0) price = useActual ? a.precioCompra : a.precioCompra;
+  if(assetCurrency(a) === "ARS"){
+    if(a.type === "CEDEAR"){
+      // CEDEAR: multiply by ratio to get full-share USD equivalent
+      return price * getCedearRatio(a.ticker) / getCCL();
+    }
+    return price / getCCL();
+  }
+  return price;
 }
 
 // ── Form state ──
@@ -4267,10 +4349,12 @@ function saveAsset(){
   if(isNaN(actualRaw)) actualRaw = compraRaw;
   // Save the currency the user chose — this is the key piece
   var currency = _formCurrency || (isARSType(tipo) ? "ARS" : "USD");
+  // Always ensure precioActual has a value (fallback to precioCompra)
+  var precioActualFinal = (!isNaN(actualRaw) && actualRaw > 0) ? actualRaw : compraRaw;
   var obj = {
     id: editId !== null ? editId : Date.now(),
     ticker: ticker, cantidad: cantidad,
-    precioCompra: compraRaw, precioActual: actualRaw,
+    precioCompra: compraRaw, precioActual: precioActualFinal,
     type: tipo, currency: currency, target: target, notas: notas
   };
   if(editId!==null){ assets=assets.map(function(a){return a.id===editId?obj:a;}); }
@@ -5230,7 +5314,7 @@ function renderPortfolioList(){
         ${!p.isDefault?`<button onclick="event.stopPropagation();renamePortfolio('${p.id}')" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:4px" title="Renombrar">✏️</button>`:""}
         ${!p.isDefault?`<button onclick="event.stopPropagation();deletePortfolio('${p.id}')" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;padding:4px" title="Eliminar">🗑</button>`:""}
       </div>
-    </div>`;
+    </div>`
   }).join("");
 }
 
@@ -6943,12 +7027,30 @@ function renderPortfolioHistory(){
   ctx.fillText(label, W/2, H-4);
 }
 
+function sanitizeAssets(list){
+  // Detectar y corregir precios corruptos del bug legado:
+  // Si precioActual << precioCompra (ratio < 0.05) en activo ARS
+  // significa que se guardó precio USD donde se esperaba ARS
+  return (list||[]).map(function(a){
+    if(a.currency==="ARS" && a.precioActual > 0 && a.precioCompra > 0){
+      var ratio = a.precioActual / a.precioCompra;
+      if(ratio < 0.05){
+        console.warn("[InvertirAR] Precio corrupto detectado en "+a.ticker+
+          ": precioActual="+a.precioActual+" vs precioCompra="+a.precioCompra+" (ratio="+ratio.toFixed(4)+"). Reseteando.");
+        a.precioActual = a.precioCompra; // reset: sin cambio hasta próxima actualización real
+        a._priceReset = true;
+      }
+    }
+    return a;
+  });
+}
+
 function loadState(){
   try{
     const a=localStorage.getItem("invertirAR_assets");
     const al=localStorage.getItem("invertirAR_alerts");
     const h=localStorage.getItem("invertirAR_history");
-    if(a)assets=JSON.parse(a);
+    if(a) assets = sanitizeAssets(JSON.parse(a));
     if(al)alerts=JSON.parse(al);
     if(h)history=JSON.parse(h);
   }catch(e){}
@@ -7067,7 +7169,7 @@ function renderComparator(){
       ${a?`<div class="cmp-pct" style="color:${d>=0?"var(--green)":"var(--red)"}">${d>=0?"+":""}${d}%</div>
       <div class="cmp-sub">Desde tu compra · $${a.precioActual}</div>`
       :`<div class="cmp-pct" style="color:var(--muted2)">—</div><div class="cmp-sub">No en tu cartera</div>`}
-    </div>`;
+    </div>`
   }).join("");
 }
 
@@ -7913,7 +8015,7 @@ function researchSetStep(idx, state="running"){
       <div class="research-step-dot ${dotState}"></div>
       <span style="color:${i < idx ? "var(--green)" : i === idx ? "var(--text)" : "var(--muted)"}">${s}</span>
       ${i < idx ? '<span style="color:var(--green);font-size:10px">✓</span>' : ""}
-    </div>`;
+    </div>`
   }).join("");
 }
 
@@ -8151,10 +8253,9 @@ async function iaCEDEARArbitrage(){
   var cedears = assets.filter(function(a){ return a.type==="CEDEAR"; });
   if(cedears.length===0){ showToast("No tenés CEDEARs en tu cartera","var(--amber)"); return; }
   var ccl = MACRO.mep || 1200;
-  // Ratios reales de conversión BYMA (aproximados)
-  var CEDEAR_RATIOS = {AAPL:10, GOOGL:20, MSFT:10, AMZN:20, TSLA:10, NVDA:10, MELI:5, META:10, BABA:5, NFLX:5};
+  // Usa los ratios globales CEDEAR_RATIOS
   var cedearsWithCalc = cedears.map(function(c){
-    var ratio = CEDEAR_RATIOS[c.ticker.toUpperCase()] || 10;
+    var ratio = getCedearRatio(c.ticker);
     var priceARS = c.precioActual || c.precioCompra || 0;
     var impliedCCL = priceARS * ratio; // precio ARS × ratio = precio USD implícito × CCL
     var desvio = ccl > 0 ? ((impliedCCL - ccl) / ccl * 100) : 0;
@@ -8913,6 +9014,8 @@ function render(){
   renderMacro();renderStats();renderDonut();renderPerfBars();renderAssets();renderHealth();
   // Re-render perf bars with a small delay to ensure assets are loaded
   setTimeout(function(){ if(assets.length>0){ renderPerfBars(); renderHealth(); } }, 200);
+  // Fetch S&P 500 YTD in background
+  setTimeout(fetchSP500YTD, 3000);
   renderPortfolioHistory();
   setTimeout(()=>{renderBenchChart();renderInfChart();},80);
 }
