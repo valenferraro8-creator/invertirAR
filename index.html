@@ -159,6 +159,19 @@ body.light-mode .glosario-term { border-color:#e2e8f0; }
 body.light-mode .glosario-example { background:#fefce8; border-color:#c47f00; color:#0f172a; }
 body.light-mode .glosario-cat-btn { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
 body.light-mode .glosario-cat-btn.active { background:#fef9c3; border-color:#c47f00; color:#c47f00; }
+/* Calendar light mode */
+body.light-mode .cal-date-day { color:#0f172a !important; }
+body.light-mode .cal-title { color:#0f172a !important; }
+body.light-mode .cal-desc { color:#475569 !important; }
+body.light-mode .cal-date { background:#f1f5f9; border-color:#cbd5e1; }
+body.light-mode .cal-event { border-bottom-color:#e2e8f0; }
+body.light-mode .cal-event:hover { background:rgba(0,0,0,0.02); }
+body.light-mode .cal-date-mon { color:#64748b !important; }
+/* Header buttons light mode */
+body.light-mode #btn-theme { color:#0f172a; border-color:#cbd5e1; }
+body.light-mode .macro-val { color:#0f172a; }
+body.light-mode .macro-label { color:#64748b; }
+body.light-mode .macro-sep { color:#cbd5e1; }
 body.light-mode .glosario-chevron { color:#64748b; }
 /* Asset cards */
 body.light-mode [style*="background:var(--card2)"] { background:#f8fafc !important; }
@@ -233,8 +246,9 @@ header::after{
   content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
   background:linear-gradient(90deg,transparent 0%,rgba(232,184,75,0.5) 30%,rgba(91,168,255,0.3) 70%,transparent 100%);
 }
-.header-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;height:60px;gap:16px}
-.logo{display:flex;align-items:center;gap:12px}
+.header-inner{max-width:1240px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;height:58px;gap:8px;overflow:hidden}
+.logo{display:flex;align-items:center;gap:12px;flex-shrink:0;min-width:0}
+#portfolio-switcher{flex-shrink:0}
 .logo-mark{
   width:36px;height:36px;
   background:linear-gradient(135deg,var(--gold) 0%,#c87820 100%);
@@ -256,7 +270,7 @@ header::after{
 }
 /* Fullscreen always visible */
 #btn-fullscreen{ display:inline-flex!important; }
-.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.header-actions{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;overflow:hidden}
 .btn{
   padding:8px 16px;border-radius:var(--r-xs);font-size:12px;font-weight:700;
   cursor:pointer;font-family:'Cabinet Grotesk',sans-serif;border:none;
@@ -437,8 +451,8 @@ body.fullscreen-active {
 .stat-icon{position:absolute;top:16px;right:16px;font-size:24px;opacity:0.09;filter:grayscale(0.3)}
 
 /* ── HEALTH SCORE ── */
-.health-ring{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0}
-.health-num{font-size:54px;font-weight:900;font-family:'Syne',sans-serif;line-height:1;letter-spacing:-3px}
+.health-ring{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 0;text-align:center}
+.health-num{font-size:52px;font-weight:900;font-family:'Syne',sans-serif;line-height:1;letter-spacing:-1px;display:block;text-align:center}
 .health-label{font-size:11px;color:var(--muted2);letter-spacing:0.5px;text-transform:none;margin-top:6px;font-weight:600}
 .health-bars{display:flex;flex-direction:column;gap:10px;margin-top:16px}
 .health-bar-row{display:flex;align-items:center;gap:10px;font-size:12px}
@@ -942,23 +956,23 @@ body.beginner-mode .beginner-hint{ display:flex!important }
       <span style="font-size:9px;color:var(--muted)">▼</span>
     </div>
     <div class="header-actions">
-      <button class="btn btn-ghost" id="btn-modo-simple" onclick="toggleModoSimple()" title="Modo Simple">🎯 Modo Simple</button>
-      <button class="btn btn-ghost" id="btn-auth" onclick="showAuthModal()" title="Mi cuenta" style="font-size:11px">👤 Cuenta</button>
-      <button class="btn btn-ghost" id="btn-notif" onclick="requestNotifPermission()" title="Activar notificaciones de alertas" style="font-size:11px">🔔 Notif.</button>
+      <button class="btn btn-ghost" id="btn-modo-simple" onclick="toggleModoSimple()" title="Modo Simple" style="font-size:11px">🎯 Simple</button>
+      <button class="btn btn-ghost" id="btn-auth" onclick="showAuthModal()" title="Mi cuenta" style="font-size:11px">👤</button>
+      <button class="btn btn-ghost" id="btn-notif" onclick="requestNotifPermission()" title="Activar notificaciones" style="font-size:11px">🔔</button>
       <button class="btn btn-ghost header-secondary" onclick="exportCSV()" title="Exportar CSV">⬇ CSV</button>
       <button class="btn btn-ghost header-secondary" onclick="exportPDF()" title="Exportar PDF">⬇ PDF</button>
       <button class="btn btn-ghost header-secondary" onclick="quickIOLImport()" style="border-color:rgba(0,214,143,0.4);color:var(--green)" title="Importar CSV/Excel de IOL">⬆ IOL</button>
-      <button class="btn btn-ghost" id="btn-theme" onclick="toggleTheme()" title="Modo claro/oscuro" style="font-size:14px;padding:5px 10px">☀️</button>
+      <button class="btn btn-ghost" id="btn-theme" onclick="toggleTheme()" title="Modo claro/oscuro" style="font-size:11px;padding:5px 10px">🌙 Oscuro</button>
       <button class="btn btn-ghost" id="btn-fullscreen" onclick="toggleFullscreen()" title="Pantalla completa" style="font-size:15px;padding:5px 10px">⛶</button>
-      <button class="btn btn-gold" onclick="switchTab('ia',null)">🤖 IA</button>
+      <button class="btn btn-gold" onclick="switchTab('ia',null)" style="font-size:11px;padding:6px 12px;white-space:nowrap">🤖 IA</button>
     </div>
   </div>
 </header>
 
 <!-- API STRIP — collapsible -->
-<div id="api-strip-bar" style="background:linear-gradient(90deg,rgba(240,192,64,0.05),rgba(240,192,64,0.02));border-bottom:1px solid rgba(240,192,64,0.12);padding:0 28px">
+<div id="api-strip-bar" style="background:rgba(10,16,28,0.97);border-bottom:1px solid rgba(240,192,64,0.1);border-top:1px solid rgba(255,255,255,0.03);padding:0 28px">
   <!-- Status bar (always visible) -->
-  <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:10px;height:36px;cursor:pointer" onclick="toggleApiPanel()">
+  <div style="max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:10px;height:36px;cursor:pointer" onclick="toggleApiPanel()">
     <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
       <div class="api-dot off" id="api-dot"></div>
       <span id="api-strip-summary" style="font-size:11px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Configurar APIs para precios en tiempo real</span>
@@ -2191,10 +2205,11 @@ async function fetchFromPolygon(symbol){
 // ── SOURCE 3: Yahoo Finance via proxy ─────────────────────
 async function fetchFromYahoo(symbol){
   try{
-    // Map AR tickers to Yahoo format
-    const ySym = AR_TICKERS.has(symbol.toUpperCase()) 
-      ? symbol.toUpperCase()+".BA" 
-      : symbol.toUpperCase();
+    // Support explicit .BA suffix (for CEDEARs needing BYMA price)
+    // or auto-add .BA for known AR stocks
+    var symUp = symbol.toUpperCase();
+    const ySym = symUp.endsWith(".BA") ? symUp
+      : (AR_TICKERS.has(symUp) ? symUp+".BA" : symUp);
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ySym}?interval=1d&range=1d`;
     const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
     const r = await fetch(proxy,{signal:AbortSignal.timeout(6000)});
@@ -2236,8 +2251,7 @@ async function fetchQ(symbol){
   if(AR_TICKERS.has(sym)){
     result = await fetchFromRava(sym);
     if(result){ _priceSources[sym]="rava"; return result; }
-    // Fallback to Yahoo .BA
-    result = await fetchFromYahoo(sym);
+    result = await fetchFromYahoo(sym); // will add .BA suffix
     if(result){ _priceSources[sym]="yahoo"; return result; }
   }
 
@@ -2255,11 +2269,57 @@ async function fetchQ(symbol){
   return null;
 }
 
+// Smart fetch: knows the asset context to return price in correct currency
+async function fetchQForAsset(asset){
+  const sym = asset.ticker.toUpperCase();
+  const cur = assetCurrency(asset);
+  var result = null;
+
+  // CEDEAR stored in ARS → need BYMA price (Yahoo .BA), NOT NYSE price
+  if(asset.type === "CEDEAR" && cur === "ARS"){
+    // Try Yahoo Finance with .BA suffix (BYMA market, returns ARS)
+    result = await fetchFromYahoo(sym + ".BA");
+    if(result){ _priceSources[sym]="yahoo-ba"; return result; }
+    // Fallback: also try Rava if it's a known AR ticker
+    if(AR_TICKERS.has(sym)){
+      result = await fetchFromRava(sym);
+      if(result){ _priceSources[sym]="rava"; return result; }
+    }
+    // Last resort: Finnhub (USD) × CCL → ARS
+    result = await fetchFromFinnhub(sym);
+    if(result){ 
+      _priceSources[sym]="finnhub-conv";
+      return {price: result.price * getCCL(), change: result.change, source:"finnhub-conv"};
+    }
+    return null;
+  }
+
+  // Acción AR → always ARS from Rava/Yahoo.BA
+  if(asset.type === "Acción AR" || AR_TICKERS.has(sym)){
+    result = await fetchFromRava(sym);
+    if(result){ _priceSources[sym]="rava"; return result; }
+    result = await fetchFromYahoo(sym); // fetchFromYahoo adds .BA for AR_TICKERS
+    if(result){ _priceSources[sym]="yahoo"; return result; }
+    return null;
+  }
+
+  // USD-denominated assets (Cripto, Bono, CEDEAR in USD, Líquida)
+  result = await fetchFromFinnhub(sym);
+  if(result){ _priceSources[sym]="finnhub"; return result; }
+  result = await fetchFromPolygon(sym);
+  if(result){ _priceSources[sym]="polygon"; return result; }
+  result = await fetchFromYahoo(sym);
+  if(result){ _priceSources[sym]="yahoo"; return result; }
+
+  _priceSources[sym]="manual";
+  return null;
+}
+
 function getPriceSourceBadge(ticker){
   var src = _priceSources[ticker.toUpperCase()];
   if(!src||src==="manual") return "";
-  var colors = {finnhub:"var(--green)",polygon:"var(--blue)",yahoo:"var(--purple)",rava:"var(--amber)"};
-  var labels = {finnhub:"FH",polygon:"PG",yahoo:"YF",rava:"RAVA"};
+  var colors = {finnhub:"var(--green)",polygon:"var(--blue)",yahoo:"var(--purple)",rava:"var(--amber)","yahoo-ba":"var(--teal)","finnhub-conv":"var(--amber)"};
+  var labels = {finnhub:"FH",polygon:"PG",yahoo:"YF",rava:"RAVA","yahoo-ba":"BYMA","finnhub-conv":"FH×CCL"};
   var c = colors[src]||"var(--muted)";
   var l = labels[src]||src;
   return `<span style="font-size:8px;padding:1px 5px;border-radius:3px;background:${c}18;color:${c};font-weight:800;font-family:monospace">${l}</span>`;
@@ -2326,13 +2386,19 @@ async function refreshPrices(){
   let n=0, bigMove=false;
   for(const a of assets){
     if(["FCI","Líquida","Bono"].includes(a.type))continue;
-    const r=await fetchQ(a.ticker);
+    const r=await fetchQForAsset(a);
     if(r){
       const prev = _lastPrices[a.ticker];
       const chgPct = prev ? Math.abs((r.price - prev)/prev*100) : 0;
       if(chgPct >= _bigMoveThreshold) bigMove=true;
       _lastPrices[a.ticker] = r.price;
-      assets=assets.map(x=>x.id===a.id?{...x,precioActual:parseFloat(r.price.toFixed(2)),liveChange:r.change}:x);
+      // Price from fetchQForAsset is already in the correct currency for this asset
+      var cur = assetCurrency(a);
+      assets=assets.map(x=>x.id===a.id?{...x,
+        precioActual: parseFloat(r.price.toFixed(cur==="ARS"?0:2)),
+        liveChange: r.change,
+        _priceSource: _priceSources[a.ticker.toUpperCase()]||"auto"
+      }:x);
       n++;
     }
     await sleep(250);
@@ -2394,7 +2460,11 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // 
 // All portfolio math in USD — respects per-asset .currency field
 const totInv=()=>assets.reduce((s,a)=>s+a.cantidad*assetUSD(a,false),0);
-const totAct=()=>assets.reduce((s,a)=>s+a.cantidad*assetUSD(a,true),0);
+const totAct=()=>assets.reduce((s,a)=>{
+  // If precioActual is 0 or missing, use precioCompra (no phantom losses)
+  var useActual = (a.precioActual && a.precioActual > 0) ? true : false;
+  return s + a.cantidad * assetUSD(a, useActual);
+}, 0);
 const gain=()=>totAct()-totInv();
 const pct=()=>{ const i=totInv(); return i>0?((gain()/i)*100).toFixed(2):0; };
 const clr=v=>v>=0?"var(--green)":"var(--red)";
@@ -2462,14 +2532,14 @@ function renderStats(){
       <div class="stat-icon">💰</div>
       <div class="stat-label">Capital invertido</div>
       <div class="stat-val" id="sv-inv" data-target="${inv.toFixed(2)}" data-prefix="$" data-dec="0" style="color:var(--muted2)">$${Math.round(inv).toLocaleString()}</div>
-      <div class="stat-sub" style="color:var(--muted)">dólares</div>
+      <div class="stat-sub" style="color:var(--muted)">USD equivalente · ≈ ARS $${Math.round(inv*getCCL()).toLocaleString("es-AR")}</div>
       <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--blue);opacity:0.4;border-radius:0 0 var(--r) var(--r)"></div>
     </div>
     <div class="stat-card" style="cursor:default">
       <div class="stat-icon">📈</div>
       <div class="stat-label">Valor hoy</div>
       <div class="stat-val" id="sv-act" data-target="${act.toFixed(2)}" data-prefix="$" data-dec="0" style="color:var(--blue)">$${Math.round(act).toLocaleString()}</div>
-      <div class="stat-sub" style="color:var(--muted)">≈ $${ars}M pesos</div>
+      <div class="stat-sub" style="color:var(--muted)">USD · ≈ $${ars}M pesos</div>
       <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--blue);border-radius:0 0 var(--r) var(--r)"></div>
     </div>
     <div class="stat-card" style="cursor:default">
@@ -2583,13 +2653,38 @@ function drawMiniDonut(svgId, legId, items, groupTotal, cartTotal, accentColor){
 // PERF BARS
 // 
 function renderPerfBars(){
-  document.getElementById("perf-bars").innerHTML=assets.map(a=>{
-    var d=((assetUSD(a,true)-assetUSD(a,false))/Math.max(assetUSD(a,false),0.0001)*100).toFixed(1);
-    const c=d>=0?"var(--green)":"var(--red)";
-    return `<div class="perf-row">
-      <div class="perf-top"><span>${a.ticker}</span><span style="color:${c}">${d>=0?"+":""}${d}%</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(Math.abs(d)*3,100)}%;background:${c}"></div></div>
-    </div>`;
+  var el = document.getElementById("perf-bars");
+  if(!el) return;
+  if(!assets || assets.length === 0){
+    el.innerHTML = '<div style="text-align:center;padding:32px 16px;color:var(--muted2);font-size:12px">Agregá activos para ver el rendimiento por activo</div>';
+    return;
+  }
+  el.innerHTML = assets.map(function(a){
+    var buyUSD = assetUSD(a, false);
+    var curUSD = assetUSD(a, true);
+    // Use precioActual if available, else precioCompra
+    var precioActual = (a.precioActual > 0) ? a.precioActual : a.precioCompra;
+    var precioCompra = a.precioCompra || 0;
+    var hasLivePrice = a.precioActual > 0 && a.precioActual !== a.precioCompra;
+    var d = precioCompra > 0 ? ((precioActual - precioCompra) / precioCompra * 100).toFixed(1) : "0.0";
+    var dNum = parseFloat(d);
+    var c = dNum >= 0 ? "var(--green)" : "var(--red)";
+    var barW = Math.min(Math.abs(dNum) * 4, 100);
+    var valUSD = (a.cantidad * (precioActual || precioCompra)).toFixed(0);
+    return '<div class="perf-row" style="margin-bottom:12px">' +
+      '<div class="perf-top" style="display:flex;justify-content:space-between;margin-bottom:5px">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<span style="font-weight:800;font-size:13px;color:var(--text2)">' + a.ticker + '</span>' +
+          '<span style="font-size:10px;color:var(--muted2)">' + (a.type || '') + '</span>' +
+        '</div>' +
+        '<div style="text-align:right">' +
+          '<span style="font-weight:800;font-size:13px;color:' + c + '">' + (dNum >= 0 ? '+' : '') + d + '%</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="bar-track" style="height:5px;background:var(--border);border-radius:99px;overflow:hidden">' +
+        '<div class="bar-fill" style="height:100%;width:' + barW + '%;background:' + c + ';border-radius:99px;transition:width 0.8s ease"></div>' +
+      '</div>' +
+    '</div>';
   }).join("");
 }
 
@@ -2784,6 +2879,10 @@ function drawSpark(id, color){
 function getSignal(a){
   var compUSD = assetUSD(a, false);
   var actUSD  = assetUSD(a, true);
+  // Guard: if precioActual was never set or is 0, use precioCompra
+  if(!a.precioActual || a.precioActual <= 0){
+    actUSD = compUSD;
+  }
   const change = compUSD > 0 ? ((actUSD - compUSD) / compUSD) * 100 : 0;
   if(change<-15)return{label:"COMPRAR",cls:"signal-buy",reason:"Caída fuerte, posible rebote"};
   if(change>30)return{label:"TOMAR GANANCIAS",cls:"signal-sell",reason:"Subió mucho, considerá vender parcial"};
@@ -2840,8 +2939,8 @@ function renderAssets(){
       ? "ARS $" + Math.round(a.precioCompra).toLocaleString("es-AR")
       : "USD $" + a.precioCompra.toFixed(2);
     var dispActual = cur === "ARS"
-      ? "ARS $" + Math.round(a.precioActual).toLocaleString("es-AR")
-      : "USD $" + a.precioActual.toFixed(2);
+      ? "ARS $" + Math.round(a.precioActual||0).toLocaleString("es-AR")
+      : "USD $" + (a.precioActual||0).toFixed(2);
     // Gain/loss in native currency
     var diffNative = cur === "ARS"
       ? a.cantidad * (a.precioActual - a.precioCompra)
@@ -5392,14 +5491,14 @@ function toggleTheme(){
   var isLight = document.body.classList.toggle("light-mode");
   localStorage.setItem("invertirAR_theme", isLight?"light":"dark");
   var btn = document.getElementById("btn-theme");
-  if(btn) btn.textContent = isLight ? "🌙" : "☀️";
+  if(btn) btn.textContent = isLight ? "🌙 Oscuro" : "☀️ Claro";
 }
 function initTheme(){
   var saved = localStorage.getItem("invertirAR_theme");
   if(saved==="light"){
     document.body.classList.add("light-mode");
     var btn = document.getElementById("btn-theme");
-    if(btn) btn.textContent = "🌙";
+    if(btn) btn.textContent = "🌙 Oscuro";
   }
 }
 
@@ -8812,6 +8911,8 @@ function switchTab(name,btn){
 function render(){
   updateDemoBtn();
   renderMacro();renderStats();renderDonut();renderPerfBars();renderAssets();renderHealth();
+  // Re-render perf bars with a small delay to ensure assets are loaded
+  setTimeout(function(){ if(assets.length>0){ renderPerfBars(); renderHealth(); } }, 200);
   renderPortfolioHistory();
   setTimeout(()=>{renderBenchChart();renderInfChart();},80);
 }
@@ -8845,7 +8946,7 @@ window.addEventListener("load",()=>{
   // Save button in header
   document.querySelector(".header-actions").insertAdjacentHTML("afterbegin",
     `<button class="btn btn-ghost" onclick="showOnboarding()" title="Tutorial" style="font-size:11px;padding:6px 12px">❓</button>
-     <button class="btn btn-ghost header-secondary" onclick="triggerBriefingNow()" title="Ver resumen matutino ahora" style="font-size:11px;padding:6px 12px">☀️</button>
+     <button class="btn btn-ghost header-secondary" onclick="triggerBriefingNow()" title="Resumen matutino" style="font-size:11px;padding:6px 12px">📋 Resumen</button>
      <button id="btn-mode" class="btn btn-ghost" onclick="toggleMode()" title="Cambiar modo" style="font-size:11px;padding:6px 12px">🎓 Modo fácil</button>`);
   // Register Service Worker (enables PWA install prompt)
   if("serviceWorker" in navigator){
